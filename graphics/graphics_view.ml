@@ -8,10 +8,13 @@ let to_screen (p : point) = Config.window_margin_px + px p.x, Config.window_marg
 let init (wall : wall) =
   let w = px (Float.of_int wall.width) + (2 * Config.window_margin_px) in
   let h = px (Float.of_int wall.height) + (2 * Config.window_margin_px) in
-  Graphics.open_graph (sprintf " %dx%d" w h);
-  Graphics.set_window_title "Rock Climbing — Phase 0";
-  (* Double-buffer: we draw to the backing store and flip in [draw]. *)
-  Graphics.auto_synchronize false
+  match Graphics.open_graph (sprintf " %dx%d" w h) with
+  | () ->
+    Graphics.set_window_title "Rock Climbing — Phase 0";
+    (* Double-buffer: we draw to the backing store and flip in [draw]. *)
+    Graphics.auto_synchronize false;
+    Ok ()
+  | exception Graphics.Graphic_failure message -> Error message
 ;;
 
 let draw_hold ~broken (h : hold) =

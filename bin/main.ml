@@ -54,7 +54,7 @@ let show ~ascii gs =
 
 let () =
   let args = Sys.get_argv () |> Array.to_list |> List.tl_exn in
-  let ascii = List.mem args "--ascii" ~equal:String.equal in
+  let ascii_requested = List.mem args "--ascii" ~equal:String.equal in
   let no_wait = List.mem args "--no-wait" ~equal:String.equal in
   let wall = Wall.test_wall_ladder in
   let gs =
@@ -64,7 +64,20 @@ let () =
     ; status = Playing
     }
   in
-  if not ascii then Climb_graphics.Graphics_view.init wall;
+  let ascii =
+    ascii_requested
+    ||
+    match Climb_graphics.Graphics_view.init wall with
+    | Ok () -> false
+    | Error message ->
+      printf
+        "No graphics window available (%s).\n\
+         Falling back to ASCII mode. To get the window over SSH you need X\n\
+         forwarding: an X server running on YOUR machine (macOS: XQuartz,\n\
+         Windows: VcXsrv) and a connection made with `ssh -X`.\n\n"
+        message;
+      true
+  in
   show ~ascii gs;
   let final =
     List.fold script ~init:gs ~f:(fun gs (limb, hold_id) ->
