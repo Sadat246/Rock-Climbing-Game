@@ -36,11 +36,13 @@ If a change to constants or mechanics breaks this causal chain, the change is wr
 ## 2. Hard Rules for Development
 
 1. **Engine first, graphics never block progress.** The game state and all mechanics
-   must be a pure, headless library (`lib/`). Rendering is a thin consumer. Early
-   phases render as ASCII to stdout. Do NOT start with OCaml's `Graphics` library —
-   it is a separate opam package now, is finicky on macOS, and cannot be tested
-   headlessly. Add a graphical frontend only in a late phase (raylib or Bogue are
-   better candidates than Graphics; decide then).
+   must be a pure, headless library (`lib/`). Rendering is a thin consumer.
+   **(Decided 2026-07-15, supersedes the raylib/Bogue plan:)** the graphical
+   frontend is the OCaml `graphics` package (X11 window), living in its own
+   library `graphics/` (`climb_graphics`) that the engine never links. Tests must
+   run headlessly and never link graphics; the pure ASCII renderer (`ascii.ml`)
+   stays as the expect-test/debugging instrument. Verify the window headlessly
+   with `Xvfb` when no real display is attached.
 
 2. **One gate for all moves.** Every state transition — player input, solver edge
    expansion, generator route-building — must go through the single function
@@ -55,10 +57,11 @@ If a change to constants or mechanics breaks this causal chain, the change is wr
    (`Random.State.t` or equivalent). Given a seed, generation and simulation must be
    fully reproducible. Never use global `Random.self_init`.
 
-5. **Pick one stdlib style and keep it.** Use the OCaml **standard library** (not
-   Jane Street Core) to minimize dependencies. The design doc below uses some Core
-   idioms (`Int.Set.t`, `List.fold ~init`) — translate them to stdlib
-   (`module IntSet = Set.Make(Int)`, `List.fold_left`) when implementing.
+5. **Pick one stdlib style and keep it.** **(Decided 2026-07-15, supersedes the
+   stdlib plan:)** use **Jane Street Core** (`open! Core`) with `ppx_jane`,
+   matching the jsip-exchange house style. The design doc's Core idioms
+   (`Int.Set.t` / `Set.M(Int).t`, `List.fold ~init`) are used as-is. Tests are
+   **inline expect tests** (`ppx_expect`, `(inline_tests)`), not alcotest.
 
 6. **Immutable state.** `game_state` is immutable; every turn produces a new state.
    This makes the solver, undo, replays, and testing trivial.
@@ -88,19 +91,25 @@ If a change to constants or mechanics breaks this causal chain, the change is wr
 │   ├── game.ml/.mli       # turn loop, win/loss, status
 │   ├── solver.ml/.mli     # Dijkstra over body configurations
 │   ├── generator.ml/.mli  # guaranteed-route generation + decoys (late phase)
-│   └── ascii.ml/.mli      # ASCII renderer (grid + HUD) — used by tests too
+│   └── ascii.ml/.mli      # ASCII renderer (grid + HUD) — expect tests + debugging
+├── graphics/
+│   └── graphics_view.ml/.mli  # OCaml-Graphics window renderer (climb_graphics);
+│                              # thin consumer of game_state, never linked by lib/ or test/
 ├── bin/
-│   └── main.ml            # interactive terminal game (reads keys, prints ASCII)
+│   └── main.ml            # the game window (OCaml Graphics); --ascii for headless runs
 └── test/
     ├── test_geometry.ml
     ├── test_movement.ml
+    ├── test_ascii.ml      # rendered-board expect tests (visual regression record)
     ├── test_balance.ml
     ├── test_scenarios.ml  # scripted climbs on hand-built walls
     ├── test_solver.ml
     └── test_tuning.ml     # invariant/property checks over constants (see §6)
 ```
 
-Use `dune` for building, `alcotest` for tests. `dune runtest` must always pass on main.
+Use `dune` for building and **inline expect tests** (`ppx_expect`) for tests —
+review every promoted `%expect` diff before accepting it. `dune runtest` must
+always pass on main.
 
 ---
 
@@ -414,7 +423,13 @@ Work strictly in order. A phase is done when its tests pass, `bin/main.ml` runs,
 `TUNING_LOG.md` is updated. **The solver moves EARLIER than the original plan** (it
 was Phase 7 there) because it is the primary tuning instrument.
 
-### Phase 0 — Pure state machine, zero graphics
+### Phase 0 — Pure state machine + minimal visuals ✅ (done 2026-07-15)
+Implemented as specced below, plus (owner request): a minimal visual — holds as
+dots and the climber as a stick figure — in the OCaml-Graphics window
+(`graphics/graphics_view.ml`), with `bin/main.exe --ascii` as the headless
+equivalent. Torso = average of attached limbs (real torso model is Phase 2).
+
+Original spec:
 - `types.ml`, `config.ml`, `geometry.ml`, `hold.ml`, minimal `movement.ml` with only:
   hold-exists, occupancy, limb-compatibility, reach checks. Fixed torso (average of
   limbs for now). No stamina/balance/chalk.
@@ -466,8 +481,9 @@ was Phase 7 there) because it is the primary tuning instrument.
 - Tests: 100 seeds → 100% of accepted walls are solver-solvable; family counts in
   range; difficulty metrics within target bands.
 
-### Phase 7 (optional/stretch) — Graphical frontend
-- raylib (via `raylib-ocaml`) or Bogue. Pure consumer of `lib/`. Colors: jug blue,
+### Phase 7 (optional/stretch) — Graphical frontend polish
+- Extend the OCaml-Graphics frontend (`graphics/`, present since Phase 0 as dots +
+  stick figure). Pure consumer of `lib/`. Colors: jug blue,
   crimp orange, sloper purple, foothold gray, rest green, crumbling red, refill
   white, finish gold. Mouse: click limb → highlight reachable → click hold.
 

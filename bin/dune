@@ -1,0 +1,5 @@
+(executable
+ (name main)
+ (libraries climb climb_graphics core core_unix graphics)
+ (preprocess
+  (pps ppx_jane)))
