@@ -88,6 +88,7 @@ If a change to constants or mechanics breaks this causal chain, the change is wr
 │   ├── movement.ml/.mli   # attempt_move — THE single validation gate
 │   ├── wall.ml/.mli       # wall data, hold lookup, hand-built test walls
 │   ├── player.ml/.mli     # player state helpers
+│   ├── ui.ml/.mli         # selection UI state (limb + reachable-hold cursor), pure
 │   ├── game.ml/.mli       # turn loop, win/loss, status
 │   ├── solver.ml/.mli     # Dijkstra over body configurations
 │   ├── generator.ml/.mli  # guaranteed-route generation + decoys (late phase)
@@ -438,7 +439,17 @@ Original spec:
 - `bin/main.ml` runs a **hardcoded move script** and prints limb coordinates per turn.
 - Tests: geometry unit tests; movement accepts/rejects with correct `reject_reason`.
 
-### Phase 1 — ASCII rendering + interactive play
+### Phase 1 — Interactive play ✅ (done 2026-07-15)
+Implemented: `lib/game.ml` (session, undo history, Phase-1 win check),
+`lib/ui.ml` (selection state; reachable holds computed by running every hold
+through `attempt_move` — the gate decides reachability), interactive loops in
+`bin/main.ml` for both frontends (Graphics keys / ASCII lines; identical
+commands, shared `apply_command`), `Ascii.render_with_ui` +
+`Graphics_view.draw_with_ui` overlays (target highlight, HUD). `--demo` keeps
+the Phase 0 script. `c` chalk / `r` rest join when their mechanics exist
+(Phases 3/5).
+
+Original spec:
 - `ascii.ml`: render the wall as a character grid. Suggested glyphs:
   `J` jug, `c` crimp, `s` sloper, `.` foothold, `R` rest, `!` crumbling, `*` chalk
   refill, `F` finish, `T` torso, `h/H` left/right hand, `f/Q` left/right foot, lines

@@ -7,3 +7,8 @@ open! Core
     [f]/[Q] left/right foot. Limbs draw over the torso; the torso draws over
     holds. Broken holds are not drawn. Last line is a status line. *)
 val render : Types.game_state -> string
+
+(** [render] plus interactive overlays: the highlighted target hold drawn as
+    [@] (over everything else), and HUD lines for the selected limb, target,
+    reachable holds, and the last feedback message. *)
+val render_with_ui : Types.game_state -> Ui.t -> string

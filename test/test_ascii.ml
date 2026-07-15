@@ -44,7 +44,7 @@ let%expect_test "ladder start pose" =
 
 
 
-    turn 0  status Playing
+    turn 0  stamina 100  chalk 5  status Playing
     |}]
 ;;
 
@@ -91,7 +91,7 @@ let%expect_test "board after one move; renderer is pure" =
 
 
 
-    turn 1  status Playing
+    turn 1  stamina 100  chalk 5  status Playing
     pure: true
     |}]
 ;;

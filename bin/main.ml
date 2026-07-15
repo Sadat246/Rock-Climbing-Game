@@ -2,18 +2,123 @@ open! Core
 open Climb
 open Climb.Types
 
-(* Phase 0: a hardcoded move script up the ladder wall (interactive control is
-   Phase 1). Every move goes through Movement.attempt_move — bin never has its
-   own legality logic.
+(* Interactive game (Phase 1). Controls, both frontends:
+     1-4  select limb (LH, RH, LF, RF)
+     n/p  cycle the highlighted reachable hold
+     m    confirm the move (Enter/space also work in the window)
+     u    undo    q  quit
+   ASCII mode additionally accepts a two-token direct move: "<limb#> <hold_id>".
 
    Flags:
-     --ascii    headless mode: print ASCII boards to stdout, no window
-     --no-wait  don't block on a keypress at the end (for scripted runs) *)
+     --demo     replay the hardcoded Phase 0 ladder script instead of playing
+     --ascii    force the terminal frontend (no window)
+     --no-wait  demo only: don't block on a keypress at the end
+   Every move still goes through Movement.attempt_move — bin has no legality
+   logic of its own. *)
 
-(* The two leading moves are deliberately illegal so the typed-rejection path
-   is visible: hold 16 is far out of reach from the start, and hold 18 is a
-   Finish hold (hands only) targeted with a foot. *)
-let script =
+let limb_of_char = function
+  | '1' -> Some Left_hand
+  | '2' -> Some Right_hand
+  | '3' -> Some Left_foot
+  | '4' -> Some Right_foot
+  | _ -> None
+;;
+
+let describe_move limb hold_id = function
+  | `Moved _ -> sprintf !"moved %{sexp:limb} to hold %d" limb hold_id
+  | `Rejected reason -> sprintf !"REJECTED: %{sexp:reject_reason}" reason
+;;
+
+(* Shared command step: returns the new session + ui. *)
+let apply_command (game : Game.t) (ui : Ui.t) command =
+  match command with
+  | `Select limb -> game, Ui.select_limb game.current limb
+  | `Cycle step -> game, (if step >= 0 then Ui.next ui else Ui.prev ui)
+  | `Undo ->
+    (match Game.undo game with
+     | None -> game, Ui.with_message ui "nothing to undo"
+     | Some game -> game, Ui.with_message (Ui.select_limb game.current ui.limb) "undone")
+  | `Move (limb, hold_id) ->
+    (match game.current.status with
+     | Won -> game, Ui.with_message ui "already won — u to undo, q to quit"
+     | Fallen _ -> game, Ui.with_message ui "fallen — u to undo, q to quit"
+     | Playing ->
+       (match Game.move game limb ~hold_id with
+        | `Moved game' ->
+          let message =
+            match game'.current.status with
+            | Won -> "YOU WON! both hands on the finish — u to undo, q to quit"
+            | Playing | Fallen _ -> describe_move limb hold_id (`Moved game')
+          in
+          game', Ui.with_message (Ui.select_limb game'.current limb) message
+        | `Rejected _ as r -> game, Ui.with_message ui (describe_move limb hold_id r)))
+;;
+
+let confirm_move (ui : Ui.t) =
+  match Ui.target ui with
+  | None -> `None
+  | Some hold_id -> `Command (`Move (ui.limb, hold_id))
+;;
+
+(* ----- Graphics frontend ----- *)
+
+let rec graphics_loop game ui =
+  Climb_graphics.Graphics_view.draw_with_ui (Game.current_state game) ui;
+  let key = Climb_graphics.Graphics_view.read_key () in
+  let command =
+    match key with
+    | 'q' -> `Quit
+    | 'n' -> `Command (`Cycle 1)
+    | 'p' -> `Command (`Cycle (-1))
+    | 'u' -> `Command `Undo
+    | 'm' | ' ' | '\r' | '\n' -> confirm_move ui
+    | c ->
+      (match limb_of_char c with
+       | Some limb -> `Command (`Select limb)
+       | None -> `None)
+  in
+  match command with
+  | `Quit -> ()
+  | `None -> graphics_loop game ui
+  | `Command c ->
+    let game, ui = apply_command game ui c in
+    graphics_loop game ui
+;;
+
+(* ----- ASCII frontend ----- *)
+
+let rec ascii_loop game ui =
+  printf "\n%s\n> %!" (Ascii.render_with_ui (Game.current_state game) ui);
+  match In_channel.input_line In_channel.stdin with
+  | None -> printf "\n"
+  | Some line ->
+    let command =
+      match String.split ~on:' ' (String.strip line) |> List.filter ~f:(Fn.non String.is_empty) with
+      | [ "q" ] -> `Quit
+      | [ "n" ] -> `Command (`Cycle 1)
+      | [ "p" ] -> `Command (`Cycle (-1))
+      | [ "u" ] -> `Command `Undo
+      | [ "m" ] -> confirm_move ui
+      | [ c ] when String.length c = 1 && Option.is_some (limb_of_char c.[0]) ->
+        `Command (`Select (Option.value_exn (limb_of_char c.[0])))
+      | [ c; hold_id ] when String.length c = 1 && Option.is_some (limb_of_char c.[0]) ->
+        (match Int.of_string_opt hold_id with
+         | Some hold_id ->
+           `Command (`Move (Option.value_exn (limb_of_char c.[0]), hold_id))
+         | None -> `None)
+      | _ -> `None
+    in
+    (match command with
+     | `Quit -> ()
+     | `None -> ascii_loop game (Ui.with_message ui "commands: 1-4 n p m u q, or '<limb#> <hold_id>'")
+     | `Command c ->
+       let game, ui = apply_command game ui c in
+       ascii_loop game ui)
+;;
+
+(* ----- Phase 0 scripted demo (kept: it exercises the reject paths) ----- *)
+
+let demo_script =
   [ Left_hand, 16 (* jug (40, 240): Out_of_reach demo *)
   ; Right_foot, 18 (* finish (40, 300): Wrong_limb_for_hold demo *)
   ; Left_hand, 12
@@ -33,18 +138,7 @@ let script =
   ]
 ;;
 
-let both_hands_on_finish (gs : game_state) =
-  let on_finish = function
-    | None -> false
-    | Some id ->
-      (match Wall.find gs.wall id with
-       | Some { kind = Finish; _ } -> true
-       | Some _ | None -> false)
-  in
-  on_finish gs.player.limbs.left_hand && on_finish gs.player.limbs.right_hand
-;;
-
-let show ~ascii gs =
+let show_demo ~ascii gs =
   if ascii
   then printf "%s\n\n" (Ascii.render gs)
   else (
@@ -52,20 +146,50 @@ let show ~ascii gs =
     ignore (Core_unix.nanosleep Config.render_delay_s : float))
 ;;
 
+let run_demo ~ascii ~no_wait game =
+  show_demo ~ascii (Game.current_state game);
+  let final =
+    List.fold demo_script ~init:game ~f:(fun game (limb, hold_id) ->
+      match Game.move game limb ~hold_id with
+      | `Rejected reason ->
+        printf
+          !"turn %d: %{sexp:limb} -> hold %d REJECTED (%{sexp:reject_reason})\n"
+          (Game.current_state game).player.turn
+          limb
+          hold_id
+          reason;
+        game
+      | `Moved game ->
+        let gs = Game.current_state game in
+        printf
+          !"turn %d: %{sexp:limb} -> hold %d ok, torso (%.0f, %.0f)\n"
+          gs.player.turn
+          limb
+          hold_id
+          gs.player.torso.x
+          gs.player.torso.y;
+        show_demo ~ascii gs;
+        game)
+  in
+  (match (Game.current_state final).status with
+   | Won ->
+     printf "Won: both hands on the finish after %d turns.\n" (Game.current_state final).player.turn
+   | Playing | Fallen _ -> printf "Script ended without reaching the finish.\n");
+  if not ascii
+  then (
+    if not no_wait then Climb_graphics.Graphics_view.wait_for_key ();
+    Climb_graphics.Graphics_view.close ())
+;;
+
 let () =
   let args = Sys.get_argv () |> Array.to_list |> List.tl_exn in
-  let ascii_requested = List.mem args "--ascii" ~equal:String.equal in
-  let no_wait = List.mem args "--no-wait" ~equal:String.equal in
+  let flag f = List.mem args f ~equal:String.equal in
+  let demo = flag "--demo" in
+  let no_wait = flag "--no-wait" in
   let wall = Wall.test_wall_ladder in
-  let gs =
-    { player = Wall.ladder_start
-    ; wall
-    ; broken_holds = Set.empty (module Int)
-    ; status = Playing
-    }
-  in
+  let game = Game.create ~wall ~start:Wall.ladder_start in
   let ascii =
-    ascii_requested
+    flag "--ascii"
     ||
     match Climb_graphics.Graphics_view.init wall with
     | Ok () -> false
@@ -78,38 +202,13 @@ let () =
         message;
       true
   in
-  show ~ascii gs;
-  let final =
-    List.fold script ~init:gs ~f:(fun gs (limb, hold_id) ->
-      let hold =
-        Option.value_exn (Wall.find wall hold_id) ~message:"script names a missing hold"
-      in
-      match Movement.attempt_move ~wall ~broken:gs.broken_holds gs.player limb hold with
-      | Error reason ->
-        printf
-          !"turn %d: %{sexp:limb} -> hold %d REJECTED (%{sexp:reject_reason})\n"
-          gs.player.turn
-          limb
-          hold_id
-          reason;
-        gs
-      | Ok player ->
-        printf
-          !"turn %d: %{sexp:limb} -> hold %d ok, torso (%.0f, %.0f)\n"
-          player.turn
-          limb
-          hold_id
-          player.torso.x
-          player.torso.y;
-        let gs = { gs with player } in
-        show ~ascii gs;
-        gs)
-  in
-  if both_hands_on_finish final
-  then printf "Both hands on the finish holds after %d turns.\n" final.player.turn
-  else printf "Script ended without reaching the finish.\n";
-  if not ascii
-  then (
-    if not no_wait then Climb_graphics.Graphics_view.wait_for_key ();
-    Climb_graphics.Graphics_view.close ())
+  if demo
+  then run_demo ~ascii ~no_wait game
+  else (
+    let ui = Ui.init (Game.current_state game) in
+    if ascii
+    then ascii_loop game ui
+    else (
+      graphics_loop game ui;
+      Climb_graphics.Graphics_view.close ()))
 ;;
