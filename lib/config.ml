@@ -70,10 +70,12 @@ let chalk_duration = 3 (* turns per application; 2–4 *)
 let refill_amount = 3 (* bag uses restored; 2–5 *)
 
 (* Solver *)
-let solver_torso_bucket = 5. (* world units per bucket; 3–10 *)
-let solver_stamina_bucket = 5 (* stamina points per bucket; 2–10 *)
+let solver_torso_bucket = 10. (* world units per bucket; 3–10 *)
+let solver_stamina_bucket = 10 (* stamina points per bucket; 2–10 *)
 let solver_chalk_edge_weight = 10
 let solver_critical_edge_weight = 5
+let solver_move_edge_weight = 1 (* per-action base cost; 1–3 *)
+let solver_max_states = 1_000_000 (* expansion safety cap; 50k–1M *)
 
 (* Rendering — display only, never gameplay *)
 let ascii_cell = 10. (* world units per ASCII grid cell; 5–20 *)

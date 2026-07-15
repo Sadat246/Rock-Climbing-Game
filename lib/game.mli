@@ -11,6 +11,11 @@ type t =
 val create : wall:Types.wall -> start:Types.player_state -> t
 val current_state : t -> Types.game_state
 
+(** The win predicate (§4.3): both hands on Finish holds, at least one foot
+    attached, stamina > 0. Shared by the turn loop and the solver's goal
+    test so they can never disagree. *)
+val won : wall:Types.wall -> Types.player_state -> bool
+
 (** Move a limb to the hold with [hold_id], via the single gate.
 
     [`Moved] carries the move's cost for HUD messages.

@@ -20,3 +20,9 @@ val ladder_start : Types.player_state
 val test_wall_overhang : Types.wall
 
 val overhang_start : Types.player_state
+
+(** Registry of hand-built walls with their starting poses, for the CLI and
+    the tuning loop. *)
+val all : (string * (Types.wall * Types.player_state)) list
+
+val find_by_name : string -> (Types.wall * Types.player_state) option

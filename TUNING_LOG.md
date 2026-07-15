@@ -18,6 +18,35 @@ ladder — feet land exactly 15 units above the torso mid-script. Fine for a
 canary, but when the real torso model (Phase 2) lands, re-check that ladder
 foot moves stay comfortably legal.
 
+## 2026-07-15 — Phase 4 solver: search design, bucket changes, first metrics
+Hypothesis: §4.12 Dijkstra with torso/stamina bucketing (5/5) would handle
+  the 20-hold ladder.
+Change 1: plain Dijkstra capped out (>200k states, 44s, no solution) — the
+  edge costs don't order "progress", so cheap sideways shuffles flood the
+  frontier. Fix A: A* with an admissible CONSISTENT heuristic (per-limb
+  vertical lower bounds + torso-rise bound of shift_factor x hand_reach per
+  move; max of consistent bounds). Fix B: `solver_torso_bucket` 5 -> 10 and
+  `solver_stamina_bucket` 5 -> 10 (both at the top of their documented
+  ranges). Still capped: 419k states / 51s to the EXACT optimum (cost 91).
+Change 2: limbs-level dominance pruning — for one (limbs, chalk) config, a
+  state with more stamina and lower cost dominates regardless of torso.
+  Stronger pessimism than §4.12's bucketing (documented in solver.ml); the
+  ladder canary guards against over-pruning. Result: 43.7k states / 4.5s,
+  cost 95 (~4% over exact). Also: Wall.find made O(1) (ids are dense array
+  indices) — it's called ~10x per gate call, millions of times per solve.
+Change 3: `solver_max_states` 200k -> 1M (safety cap only).
+First metrics (recorded as bands in test_tuning.ml):
+  ladder: cost 95, 13 moves, 0 rests(!), min_stamina 18, 0 critical, 43.7k
+  states. The optimal route takes 2-rung reaches — the canary is much
+  easier than its hand script (38 turns) implied. Content lesson for
+  Phases 5-6: tight hold spacing lets the solver (and good players) skip
+  rungs; hard walls need SPARSE holds, not just expensive ones.
+  ladder @ 20 stamina: solvable, 5 rests, min_stamina 3 — the solver
+  rest-manages routes. overhang: No_route in 4950 states (correct: no
+  finish holds).
+Verdict: keep. Bands set: ladder moves <= 20, min_stamina >= 10, chalk 0,
+  critical 0, states < 200k.
+
 ## 2026-07-15 — Phase 3 stamina/grip: rest rows on the ladder, desperate-move falls
 Hypothesis: the §8 cost table would leave the 30-move ladder script winnable
   on the 100 starting stamina.

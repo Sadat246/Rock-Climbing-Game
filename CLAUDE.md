@@ -505,7 +505,23 @@ Original spec:
 - Tests: cost accounting on scripted climbs; exhaustion behavior both with and
   without the grace turn.
 
-### Phase 4 — Solver (moved up!)
+### Phase 4 — Solver ✅ (done 2026-07-15)
+Implemented as specced below with two documented deviations (TUNING_LOG):
+**A\*** (= Dijkstra + admissible consistent heuristic: limb/torso height
+lower bounds; h=0 recovers plain Dijkstra) and **limbs-level dominance
+pruning** (same limb config + chalk, more stamina, less cost dominates —
+regardless of torso). Plain Dijkstra drowned in cheap sideways-shuffle
+states (>200k expansions, no solution); with both, the ladder solves in
+~4.5s / 44k states at ~4% over the exact optimum (95 vs 91). Both
+prune-but-never-invent: every returned route is replayed through the gate
+(route_stats) and the keystone test replays it through Game to Won.
+`solve --wall NAME` / `tune` subcommands print the per-turn trace +
+metrics. Findings: the ladder's optimal route is 13 moves with NO rests
+(big 2-rung reaches — the canary is far easier than its 38-turn script
+suggested), and from a 20-stamina start the solver plans a rest-managed
+route arriving with 3 stamina.
+
+Original spec:
 - Dijkstra as specced in 4.12, path reconstruction, and a `solve` CLI subcommand:
   `dune exec bin/main.exe -- solve --wall ladder --seed 42` prints the optimal move
   list, cost, and `difficulty_metrics`.

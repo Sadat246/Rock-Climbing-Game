@@ -17,22 +17,30 @@ let create ~wall ~start =
 
 let current_state t = t.current
 
+(* The win predicate (§4.3) — also the solver's goal test. *)
+let won ~(wall : wall) (player : player_state) =
+  let hand_on_finish id =
+    match Option.bind id ~f:(Wall.find wall) with
+    | Some { kind = Finish; _ } -> true
+    | Some _ | None -> false
+  in
+  let foot_attached =
+    Option.is_some player.limbs.left_foot || Option.is_some player.limbs.right_foot
+  in
+  hand_on_finish player.limbs.left_hand
+  && hand_on_finish player.limbs.right_hand
+  && foot_attached
+  && player.stamina > 0
+;;
+
 (* Status after a turn (§4.3 / §4.9):
    - stamina at 0 in a Strained/Critical pose (or with the grace turn
      disabled) -> Fallen;
    - stamina at 0 while Stable -> "pumped out": one grace chance — rest if a
      hand is already on a Rest hold, otherwise the next attempt is desperate;
-   - win: both hands on Finish holds, a foot attached, stamina > 0. *)
+   - win via [won]. *)
 let compute_status (gs : game_state) =
   let stability = Balance.stability gs.wall gs.player.limbs ~torso:gs.player.torso in
-  let hand_on_finish id =
-    match Option.bind id ~f:(Wall.find gs.wall) with
-    | Some { kind = Finish; _ } -> true
-    | Some _ | None -> false
-  in
-  let foot_attached =
-    Option.is_some gs.player.limbs.left_foot || Option.is_some gs.player.limbs.right_foot
-  in
   if gs.player.stamina <= 0
   then (
     match stability with
@@ -43,9 +51,7 @@ let compute_status (gs : game_state) =
         (sprintf
            !"exhausted in a %{sexp:stability} pose"
            stability))
-  else if hand_on_finish gs.player.limbs.left_hand
-          && hand_on_finish gs.player.limbs.right_hand
-          && foot_attached
+  else if won ~wall:gs.wall gs.player
   then Won
   else gs.status
 ;;

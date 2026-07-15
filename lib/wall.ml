@@ -1,7 +1,14 @@
 open! Core
 open Types
 
-let find (wall : wall) id = Array.find wall.holds ~f:(fun h -> h.id = id)
+(* Hold ids are dense array indices on every wall we build, so lookup is
+   O(1) with a guarded fallback scan for exotic walls. Called from the gate
+   ~10x per attempt_move — the solver makes millions of those. *)
+let find (wall : wall) id =
+  if id >= 0 && id < Array.length wall.holds && wall.holds.(id).id = id
+  then Some wall.holds.(id)
+  else Array.find wall.holds ~f:(fun h -> h.id = id)
+;;
 
 let position_exn wall id =
   match find wall id with
@@ -105,3 +112,11 @@ let overhang_start =
     ; right_foot = Some 1 (* foothold (60, 30) *)
     }
 ;;
+
+let all =
+  [ "ladder", (test_wall_ladder, ladder_start)
+  ; "overhang", (test_wall_overhang, overhang_start)
+  ]
+;;
+
+let find_by_name name = List.Assoc.find all name ~equal:String.equal

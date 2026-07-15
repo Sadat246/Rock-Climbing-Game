@@ -275,13 +275,77 @@ let run_demo ~ascii ~no_wait game =
     Climb_graphics.Graphics_view.close ())
 ;;
 
-let () =
-  let args = Sys.get_argv () |> Array.to_list |> List.tl_exn in
+(* ----- Solver subcommands (Phase 4) ----- *)
+
+(* Per-turn trace of a solver route, replayed through the real Game — the
+   §6.3 tuning instrument's view of "how the optimal climb feels". *)
+let print_route ~wall ~start actions =
+  let game = Game.create ~wall ~start in
+  let final =
+    List.fold actions ~init:game ~f:(fun game action ->
+      let describe, game' =
+        match (action : Solver.action) with
+        | Rest ->
+          ( "rest"
+          , (match Game.rest game with
+             | `Rested g -> g
+             | `Rejected r ->
+               raise_s [%message "solver route rest rejected" (r : reject_reason)]) )
+        | Move (limb, hold_id) ->
+          ( sprintf !"%-10s -> %2d" (Sexp.to_string [%sexp (limb : limb)]) hold_id
+          , (match Game.move game limb ~hold_id with
+             | `Moved (g, _) -> g
+             | `Fell (_, reason) ->
+               raise_s [%message "solver route fell" (reason : string)]
+             | `Rejected r ->
+               raise_s [%message "solver route rejected" (r : reject_reason)]) )
+      in
+      let gs = Game.current_state game' in
+      printf
+        !"turn %2d  %-17s stamina %3d  %{sexp:stability}\n"
+        gs.player.turn
+        describe
+        gs.player.stamina
+        (Balance.stability gs.wall gs.player.limbs ~torso:gs.player.torso);
+      game')
+  in
+  printf !"final status: %{sexp:game_status}\n" (Game.current_state final).status
+;;
+
+let solve_wall name =
+  match Wall.find_by_name name with
+  | None ->
+    printf
+      "unknown wall %s (available: %s)\n"
+      name
+      (String.concat ~sep:", " (List.map Wall.all ~f:fst))
+  | Some (wall, start) ->
+    printf "=== %s ===\n" name;
+    (match Solver.solve ~wall ~start with
+     | No_route { states_expanded } ->
+       printf "no route (search space exhausted after %d states)\n" states_expanded
+     | Search_limit { states_expanded } ->
+       printf "gave up at the state cap (%d states)\n" states_expanded
+     | Solution { actions; metrics } ->
+       print_route ~wall ~start actions;
+       printf !"%{sexp:Solver.metrics}\n" metrics)
+;;
+
+let wall_arg args ~default =
+  match List.drop_while args ~f:(fun a -> not (String.equal a "--wall")) with
+  | _ :: name :: _ -> name
+  | _ -> default
+;;
+
+let run_play args =
   let flag f = List.mem args f ~equal:String.equal in
   let demo = flag "--demo" in
   let no_wait = flag "--no-wait" in
-  let wall = Wall.test_wall_ladder in
-  let game = Game.create ~wall ~start:Wall.ladder_start in
+  let wall, start =
+    Option.value (Wall.find_by_name (wall_arg args ~default:"ladder"))
+      ~default:(Wall.test_wall_ladder, Wall.ladder_start)
+  in
+  let game = Game.create ~wall ~start in
   let ascii =
     flag "--ascii"
     ||
@@ -305,4 +369,14 @@ let () =
     else (
       graphics_loop game ui;
       Climb_graphics.Graphics_view.close ()))
+;;
+
+(* ----- Entry point ----- *)
+
+let () =
+  let args = Sys.get_argv () |> Array.to_list |> List.tl_exn in
+  match args with
+  | "solve" :: rest -> solve_wall (wall_arg rest ~default:"ladder")
+  | "tune" :: _ -> List.iter Wall.all ~f:(fun (name, _) -> solve_wall name)
+  | args -> run_play args
 ;;

@@ -43,7 +43,7 @@ type limb_positions =
   ; left_foot : int option
   ; right_foot : int option
   }
-[@@deriving sexp_of, compare, equal]
+[@@deriving sexp_of, compare, equal, hash]
 
 type chalk_state =
   { remaining : int (* uses left in bag *)
