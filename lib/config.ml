@@ -77,6 +77,21 @@ let solver_critical_edge_weight = 5
 let solver_move_edge_weight = 1 (* per-action base cost; 1–3 *)
 let solver_max_states = 1_000_000 (* expansion safety cap; 50k–1M *)
 
+(* Generation (Phase 6). Distances in world units. *)
+let gen_wall_width = 140. (* 120–240 *)
+let gen_wall_height = 340. (* 220–400 *)
+let gen_min_hold_spacing = 18. (* 10–25; sparse = harder AND faster to solve (Phase 4 lesson) *)
+let gen_rest_threshold = 40 (* insert a rest stop when sim stamina drops below; 25–60 *)
+let gen_rest_target = 90 (* rest back up to; 70–100 *)
+let gen_retry_limit = 40 (* placement samples per step before fallback; 20–80 *)
+let gen_step_limit = 400 (* total construction steps before bailing a seed *)
+
+(* Generation acceptance bands (§4.13 step 6 / §4.14) *)
+let gen_accept_min_moves = 12 (* fewer = too easy *)
+let gen_accept_max_moves = 60 (* more = a slog *)
+let gen_accept_max_stamina_margin = 55 (* optimal route must arrive with <= this *)
+let gen_accept_max_families = 2 (* 1–2 route families (§4.14) *)
+
 (* Rendering — display only, never gameplay *)
 let ascii_cell = 10. (* world units per ASCII grid cell; 5–20 *)
 let pixels_per_unit = 2.5 (* Graphics-window pixels per world unit; 1–4 *)

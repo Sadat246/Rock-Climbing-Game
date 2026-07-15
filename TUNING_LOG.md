@@ -18,6 +18,37 @@ ladder — feet land exactly 15 units above the torso mid-script. Fine for a
 canary, but when the real torso model (Phase 2) lands, re-check that ladder
 foot moves stay comfortably legal.
 
+## 2026-07-15 — Phase 6 generation: sparse-by-construction, sizing experiments
+Hypothesis: route-first construction through the gate (§4.13) with small
+  steps (hand dy 15-55) would produce puzzly walls.
+Reality (empirical loop, all knobs in config.ml):
+  1. Small construction steps -> DENSE routes -> the solver leaps past most
+     holds: 8-move optima on 260-tall walls, all rejected "too easy". The
+     Phase 4 ladder lesson generalizes: THE ROUTE ITSELF must be sparse.
+     Fix: construction steps near the climber's real limits (hand dy
+     Easy 30-55 / Medium 40-70 / Hard 48-80; feet 20-45), min hold spacing
+     14 -> 18, decoys 8-16 -> 6-10 (every hold multiplies solver branching).
+  2. Wall sizing: 260 tall caps optima at ~8-9 moves structurally; 340 tall
+     lands the band (first accepted wall: 13 moves, margin 17, families 1,
+     ~40s solve). gen_wall_width 160 -> 140.
+  3. Generation robustness: feet initially couldn't follow (targets above
+     torso+15 burned every retry -> "stuck" seeds). Fix: clamp foot targets
+     under the vertical limit, hands-lead limb picking, all-limbs rescue
+     before bailing. Finish placement made forgiving (wide x, banded y,
+     finish_y from what actually landed). Some seeds still fail generation
+     (finish pose) — seeds are free, acceptance quality > yield.
+  4. §5 Phase 6's "100 seeds" acceptance test is a CLI tuning run
+     (`sweep --from N --count K`), not a unit test — full-size solves cost
+     tens of seconds each. Unit tests pin determinism + the §4.13/§6.4
+     keystone on short (height 200) walls.
+Result (sweep, seeds 1-8 medium @ 140x340): 4/8 ACCEPTED — moves 13/14/14/14,
+  margins 17/12/9/14, families 1/1/2/2, chalk 0, critical 0; 4 generation
+  failures; ZERO unsolvable and zero out-of-band among generated walls (the
+  by-construction guarantee held). ~11m40s wall for 8 seeds incl. family
+  re-solves. Future knobs: chalk-forced generated walls need a higher
+  special rate or sloper clusters (hard difficulty); critical-pose routes
+  need overhang-style foot deserts in the generator's vocabulary.
+
 ## 2026-07-15 — Phase 5 chalk/crumbling: solver dominance rework, sloper_gate content
 Hypothesis: chalk edges would slot into the Phase 4 solver unchanged.
 Reality (all changes are solver internals; NO gameplay constants touched):

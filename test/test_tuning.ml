@@ -34,7 +34,7 @@ let replay_through_game ~wall ~start (actions : Solver.action list) =
 ;;
 
 let%expect_test "ladder canary via the solver: solves, replays to Won, in-band" =
-  (match Solver.solve ~wall:Wall.test_wall_ladder ~start:Wall.ladder_start with
+  (match Solver.solve ~blocked:(Set.empty (module Int)) ~wall:Wall.test_wall_ladder ~start:Wall.ladder_start with
    | No_route _ | Search_limit _ ->
      print_endline "LADDER DID NOT SOLVE - a constant crossed a hard floor (§6.3)"
    | Solution { actions; metrics } ->
@@ -59,7 +59,7 @@ let%expect_test "ladder canary via the solver: solves, replays to Won, in-band" 
 ;;
 
 let%expect_test "sloper_gate: solver finds the chalk-dependent route, in-band" =
-  (match Solver.solve ~wall:Wall.test_wall_sloper_gate ~start:Wall.sloper_gate_start with
+  (match Solver.solve ~blocked:(Set.empty (module Int)) ~wall:Wall.test_wall_sloper_gate ~start:Wall.sloper_gate_start with
    | No_route _ | Search_limit _ -> print_endline "SLOPER GATE DID NOT SOLVE"
    | Solution { actions; metrics } ->
      let status =

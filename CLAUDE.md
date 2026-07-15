@@ -560,7 +560,19 @@ Original spec:
 - Tests: chalk math; crumbling-hold breakage mid-climb; solver finds chalk-dependent
   routes.
 
-### Phase 6 — Generation + difficulty
+### Phase 6 — Generation + difficulty ✅ (done 2026-07-15)
+Implemented as specced below (route-first through the gate, decoys, solver
+accept/reject, §4.14 families via blocked re-solves). Key finding: the
+construction climber must take NEAR-MAXIMAL steps — dense routes solve in
+8 leaps regardless of hold count (see TUNING_LOG). CLI: `gen --seed N
+[--difficulty easy|medium|hard] [--watch] [--play]`, `sweep --from N
+--count K`. The 100-seed acceptance sweep is a CLI tuning run, not a unit
+test (solver cost); unit tests pin determinism + the keystone on short
+walls. Generation failures (stuck construction / finish placement) are
+allowed — seeds are free; `evaluate` rejects unsolvable (= bug) and
+out-of-band walls.
+
+Original spec:
 - Pipeline from 4.13, route families from 4.14, difficulty scoring, accept/reject
   loop over seeds.
 - Tests: 100 seeds → 100% of accepted walls are solver-solvable; family counts in

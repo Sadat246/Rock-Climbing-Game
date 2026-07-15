@@ -7,7 +7,7 @@ open Climb.Types
    few seconds and we only want to pay it once. *)
 
 let%expect_test "overhang: no finish holds, search space exhausts cleanly" =
-  (match Solver.solve ~wall:Wall.test_wall_overhang ~start:Wall.overhang_start with
+  (match Solver.solve ~blocked:(Set.empty (module Int)) ~wall:Wall.test_wall_overhang ~start:Wall.overhang_start with
    | No_route { states_expanded } -> printf "no route, %d states expanded\n" states_expanded
    | Solution _ -> print_endline "unexpectedly solved"
    | Search_limit _ -> print_endline "unexpectedly hit the cap");
@@ -15,7 +15,7 @@ let%expect_test "overhang: no finish holds, search space exhausts cleanly" =
 ;;
 
 let%expect_test "determinism: same wall, same outcome, same route" =
-  let solve () = Solver.solve ~wall:Wall.test_wall_overhang ~start:Wall.overhang_start in
+  let solve () = Solver.solve ~blocked:(Set.empty (module Int)) ~wall:Wall.test_wall_overhang ~start:Wall.overhang_start in
   let a = solve () in
   let b = solve () in
   printf
@@ -32,7 +32,7 @@ let%expect_test "determinism: same wall, same outcome, same route" =
    solver doing real route-planning, not just pathfinding. *)
 let%expect_test "low stamina: the solver rest-manages its way up" =
   let start = { Wall.ladder_start with stamina = 20 } in
-  (match Solver.solve ~wall:Wall.test_wall_ladder ~start with
+  (match Solver.solve ~blocked:(Set.empty (module Int)) ~wall:Wall.test_wall_ladder ~start with
    | No_route { states_expanded } -> printf "no route, %d states expanded\n" states_expanded
    | Solution { actions; metrics } ->
      let rests = List.count actions ~f:(function Solver.Rest -> true | Move _ | Chalk _ -> false) in

@@ -282,14 +282,14 @@ let route_stats ~wall ~broken ~(start : player_state) actions =
       , Int.min min_chalk next.chalk.remaining ))
 ;;
 
-let solve ~(wall : wall) ~(start : player_state) =
+let solve ~blocked ~(wall : wall) ~(start : player_state) =
   (* Crumbling holds are treated as ALREADY BROKEN: tracking per-hold wear in
      the search key would explode the space, and assuming they survive would
      be optimistic (could claim routes the real game breaks under you). The
      pessimistic stance means solver routes never depend on crumbling holds —
      by design they are decoy material (§4.13). *)
   let broken =
-    Array.fold wall.holds ~init:(Set.empty (module Int)) ~f:(fun acc h ->
+    Array.fold wall.holds ~init:blocked ~f:(fun acc h ->
       match h.kind with
       | Crumbling -> Set.add acc h.id
       | Jug | Crimp | Sloper | Foothold | Rest | Chalk_refill | Finish -> acc)
@@ -381,3 +381,4 @@ let solve ~(wall : wall) ~(start : player_state) =
           }
       }
 ;;
+

@@ -44,4 +44,11 @@ type outcome =
   | Search_limit of { states_expanded : int } (* Config.solver_max_states hit *)
 [@@deriving sexp_of]
 
-val solve : wall:Types.wall -> start:Types.player_state -> outcome
+(** [blocked] adds extra unusable holds on top of the crumbling-holds rule —
+    pass [Set.empty (module Int)] normally; route-family counting (§4.14)
+    blocks the optimal route's key holds and re-solves. *)
+val solve
+  :  blocked:Set.M(Int).t
+  -> wall:Types.wall
+  -> start:Types.player_state
+  -> outcome

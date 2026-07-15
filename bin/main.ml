@@ -411,7 +411,7 @@ let solve_wall ?(watch = false) name =
       (String.concat ~sep:", " (List.map Wall.all ~f:fst))
   | Some (wall, start) ->
     printf "=== %s ===\n" name;
-    (match Solver.solve ~wall ~start with
+    (match Solver.solve ~blocked:(Set.empty (module Int)) ~wall ~start with
      | No_route { states_expanded } ->
        printf "no route (search space exhausted after %d states)\n" states_expanded
      | Search_limit { states_expanded } ->
@@ -428,13 +428,36 @@ let wall_arg args ~default =
   | _ -> default
 ;;
 
+let int_arg args ~flag ~default =
+  match List.drop_while args ~f:(fun a -> not (String.equal a flag)) with
+  | _ :: v :: _ -> Option.value (Int.of_string_opt v) ~default
+  | _ -> default
+;;
+
+let difficulty_arg args =
+  match List.drop_while args ~f:(fun a -> not (String.equal a "--difficulty")) with
+  | _ :: v :: _ -> Option.value (Generator.difficulty_of_string v) ~default:Generator.Medium
+  | _ -> Generator.Medium
+;;
+
 let run_play args =
   let flag f = List.mem args f ~equal:String.equal in
   let demo = flag "--demo" in
   let no_wait = flag "--no-wait" in
   let wall, start =
-    Option.value (Wall.find_by_name (wall_arg args ~default:"ladder"))
-      ~default:(Wall.test_wall_ladder, Wall.ladder_start)
+    (* --gen SEED [--difficulty D] plays a generated wall directly (no
+       solver gate-keeping: exploring unevaluated seeds is fine in play) *)
+    if List.mem args "--gen" ~equal:String.equal
+    then (
+      let seed = int_arg args ~flag:"--gen" ~default:42 in
+      match Generator.generate ~seed ~difficulty:(difficulty_arg args) () with
+      | Ok g -> g.wall, g.start
+      | Error e ->
+        printf !"generation failed: %{Error#hum}; falling back to the ladder\n" e;
+        Wall.test_wall_ladder, Wall.ladder_start)
+    else
+      Option.value (Wall.find_by_name (wall_arg args ~default:"ladder"))
+        ~default:(Wall.test_wall_ladder, Wall.ladder_start)
   in
   let game = Game.create ~wall ~start in
   let ascii =
@@ -462,6 +485,71 @@ let run_play args =
       Climb_graphics.Graphics_view.close ()))
 ;;
 
+(* ----- Generation (Phase 6) ----- *)
+
+let run_gen args =
+  let seed = int_arg args ~flag:"--seed" ~default:42 in
+  let difficulty = difficulty_arg args in
+  let watch = List.mem args "--watch" ~equal:String.equal in
+  let play = List.mem args "--play" ~equal:String.equal in
+  match Generator.generate ~seed ~difficulty () with
+  | Error e -> printf !"generation failed: %{Error#hum}\n" e
+  | Ok g ->
+    printf
+      !"seed %d (%{sexp:Generator.difficulty}): %d holds (%d route + %d decoys), wall %dx%d\n"
+      seed
+      difficulty
+      (Array.length g.wall.holds)
+      (List.length g.route_holds)
+      (List.length g.decoy_holds)
+      g.wall.width
+      g.wall.height;
+    (match Generator.evaluate g with
+     | Rejected why -> printf "REJECTED: %s (try another seed)\n" why
+     | Accepted { metrics; families; actions } ->
+       printf !"ACCEPTED  families %d\n%{sexp:Solver.metrics}\n" families metrics;
+       if watch then watch_route ~wall:g.wall ~start:g.start actions;
+       if play
+       then (
+         let game = Game.create ~wall:g.wall ~start:g.start in
+         match Climb_graphics.Graphics_view.init g.wall with
+         | Ok () ->
+           graphics_loop game (Ui.init (Game.current_state game));
+           Climb_graphics.Graphics_view.close ()
+         | Error _ -> ascii_loop game (Ui.init (Game.current_state game))))
+;;
+
+let run_sweep args =
+  let from = int_arg args ~flag:"--from" ~default:1 in
+  let count = int_arg args ~flag:"--count" ~default:20 in
+  let difficulty = difficulty_arg args in
+  let accepted = ref 0 in
+  let failed_gen = ref 0 in
+  List.iter (List.range from (from + count)) ~f:(fun seed ->
+    match Generator.generate ~seed ~difficulty () with
+    | Error e ->
+      incr failed_gen;
+      printf !"seed %3d: generation failed - %{Error#hum}\n%!" seed e
+    | Ok g ->
+      (match Generator.evaluate g with
+       | Rejected why -> printf "seed %3d: rejected - %s\n%!" seed why
+       | Accepted { metrics; families; _ } ->
+         incr accepted;
+         printf
+           "seed %3d: ACCEPTED  moves %2d  chalk %d  margin %2d  critical %d  families %d\n%!"
+           seed
+           metrics.optimal_moves
+           metrics.chalk_required
+           metrics.min_stamina_remaining
+           metrics.critical_balance_turns
+           families));
+  printf
+    "accepted %d/%d (%d generation failures)\n"
+    !accepted
+    count
+    !failed_gen
+;;
+
 (* ----- Entry point ----- *)
 
 let () =
@@ -471,5 +559,7 @@ let () =
     let watch = List.mem rest "--watch" ~equal:String.equal in
     solve_wall ~watch (wall_arg rest ~default:"ladder")
   | "tune" :: _ -> List.iter Wall.all ~f:(fun (name, _) -> solve_wall name)
+  | "gen" :: rest -> run_gen rest
+  | "sweep" :: rest -> run_sweep rest
   | args -> run_play args
 ;;
