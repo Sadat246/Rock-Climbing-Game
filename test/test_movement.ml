@@ -209,6 +209,44 @@ let%expect_test "would fall: torso ends outside horizontal support + margin" =
   [%expect {| REJECTED Would_fall |}]
 ;;
 
+let%expect_test "cost accounting: breakdown, sideways vs up, stamina applied" =
+  let show limb hold_id =
+    match
+      Movement.preview_move
+        ~wall
+        ~broken:no_broken
+        start
+        limb
+        (Option.value_exn (Wall.find wall hold_id))
+    with
+    | Error reason -> printf !"REJECTED %{sexp:reject_reason}\n" reason
+    | Ok (p, cost) ->
+      printf
+        !"%-10s -> %2d  %{sexp:Movement.cost}  stamina %d\n"
+        (Sexp.to_string [%sexp (limb : limb)])
+        hold_id
+        cost
+        p.stamina
+  in
+  (* hand UP to a jug: 3 movement + 1 stable upkeep + 2 jug grip *)
+  show Left_hand 4;
+  (* hand SIDEWAYS onto the other hand's jug: 2 movement + 1 + 2 *)
+  show Left_hand 3;
+  (* foot up onto a jug: 2 movement + 1 + 2 *)
+  show Left_foot 2;
+  [%expect {|
+    Left_hand  ->  4  ((movement 3) (penalties 0) (upkeep 1) (grip 2) (total 6))  stamina 94
+    Left_hand  ->  3  ((movement 2) (penalties 2) (upkeep 1) (grip 2) (total 7))  stamina 93
+    Left_foot  ->  2  ((movement 2) (penalties 0) (upkeep 1) (grip 2) (total 5))  stamina 95
+    |}]
+;;
+
+let%expect_test "insufficient stamina: the gate refuses what you can't afford" =
+  let broke = { start with stamina = 5 } in
+  print_result (try_move ~player:broke Left_hand 4);
+  [%expect {| REJECTED Insufficient_stamina |}]
+;;
+
 let%expect_test "purity: same inputs, same result; input state unchanged" =
   let before = start in
   let r1 = try_move Left_hand 4 in

@@ -16,25 +16,25 @@ let%expect_test "ladder start pose" =
         F   F
 
 
-        .   .
+        J   J
 
 
-        .   .
+        J   J
 
 
-        .   .
+        R   R
 
 
-        .   .
+        J   J
 
 
-        .   .
+        J   J
 
 
-        .   .
+        R   R
 
 
-        .   .
+        J   J
 
 
         h   H

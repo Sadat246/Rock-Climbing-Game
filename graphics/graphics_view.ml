@@ -74,9 +74,9 @@ let draw_hold (wall : wall) ~broken (h : hold) =
     | Jug | Crimp | Sloper | Foothold | Rest | Crumbling | Chalk_refill -> ())
 ;;
 
-let draw_climber (wall : wall) (player : player_state) =
+let draw_climber (wall : wall) (player : player_state) ~color =
   let tx, ty = to_screen wall player.torso in
-  Graphics.set_color Graphics.black;
+  Graphics.set_color color;
   Graphics.set_line_width 2;
   (* Stick figure: a line from the torso to each attached limb. *)
   List.iter (Player.attached player.limbs) ~f:(fun (_, hold_id) ->
@@ -88,10 +88,17 @@ let draw_climber (wall : wall) (player : player_state) =
   Graphics.draw_circle tx (ty + 11) 5
 ;;
 
+let climber_color (gs : game_state) =
+  match gs.status with
+  | Fallen _ -> Graphics.red
+  | Won -> Graphics.rgb 218 165 32
+  | Playing -> Graphics.black
+;;
+
 let draw_scene (gs : game_state) =
   Graphics.clear_graph ();
   Array.iter gs.wall.holds ~f:(draw_hold gs.wall ~broken:gs.broken_holds);
-  draw_climber gs.wall gs.player
+  draw_climber gs.wall gs.player ~color:(climber_color gs)
 ;;
 
 let draw (gs : game_state) =
@@ -106,11 +113,13 @@ let stability_color = function
   | Falling -> Graphics.rgb 120 0 0
 ;;
 
-(* Post-move state for the highlighted target, via the single gate (pure). *)
+(* Post-move state + cost for the highlighted target, via the single gate
+   (pure). Desperate targets preview too — the player must see the fall
+   coming. *)
 let preview (gs : game_state) (ui : Ui.t) =
   Option.bind (Ui.target ui) ~f:(fun id ->
     Option.bind (Wall.find gs.wall id) ~f:(fun hold ->
-      Movement.attempt_move ~wall:gs.wall ~broken:gs.broken_holds gs.player ui.limb hold
+      Movement.preview_move ~wall:gs.wall ~broken:gs.broken_holds gs.player ui.limb hold
       |> Result.ok))
 ;;
 
@@ -158,21 +167,39 @@ let draw_hud (gs : game_state) (ui : Ui.t) ~after =
   let now_line, now_stab =
     balance_summary gs ~limbs:gs.player.limbs ~torso:gs.player.torso
   in
-  line 2 (stability_color now_stab) ("now:    " ^ now_line);
+  line
+    2
+    (stability_color now_stab)
+    (sprintf "now:    stamina %d   %s" gs.player.stamina now_line);
   match after with
   | None -> ()
-  | Some (p : player_state) ->
+  | Some ((p : player_state), (cost : Movement.cost)) ->
     let after_line, after_stab = balance_summary gs ~limbs:p.limbs ~torso:p.torso in
-    line 3 (stability_color after_stab) ("after:  " ^ after_line)
+    if cost.total > gs.player.stamina
+    then
+      line
+        3
+        Graphics.red
+        (sprintf
+           "after:  cost %d > stamina %d = FALL   %s"
+           cost.total
+           gs.player.stamina
+           after_line)
+    else
+      line
+        3
+        (stability_color after_stab)
+        (sprintf "after:  cost %d -> stamina %d   %s" cost.total p.stamina after_line)
 ;;
 
 let draw_with_ui (gs : game_state) (ui : Ui.t) =
   draw_scene gs;
   let wall = gs.wall in
-  (* All reachable holds for the selected limb: pale rings. *)
-  Graphics.set_color pale_green;
+  (* Reachable holds for the selected limb: pale green rings, or RED when
+     committing would exceed remaining stamina (= a fall). *)
   Graphics.set_line_width 1;
   List.iter ui.candidates ~f:(fun id ->
+    Graphics.set_color (if Ui.is_desperate ui id then Graphics.red else pale_green);
     let x, y = to_screen wall (Wall.position_exn wall id) in
     Graphics.draw_circle x y 8);
   (* Selected limb's line redrawn in green, thicker. *)
@@ -183,14 +210,15 @@ let draw_with_ui (gs : game_state) (ui : Ui.t) =
     let x, y = to_screen wall (Wall.position_exn wall id) in
     Graphics.moveto tx ty;
     Graphics.lineto x y);
-  (* Highlighted target hold: bold green ring. *)
+  (* Highlighted target hold: bold ring (red when desperate). *)
   Graphics.set_line_width 2;
   Option.iter (Ui.target ui) ~f:(fun id ->
+    Graphics.set_color (if Ui.is_desperate ui id then Graphics.red else green);
     let x, y = to_screen wall (Wall.position_exn wall id) in
     Graphics.draw_circle x y 9);
   (* Ghost torso: where the torso would shift if the move is confirmed. *)
   let after = preview gs ui in
-  Option.iter after ~f:(fun (p : player_state) ->
+  Option.iter after ~f:(fun ((p : player_state), (_ : Movement.cost)) ->
     let gx, gy = to_screen wall p.torso in
     Graphics.set_color ghost_gray;
     Graphics.set_line_width 1;

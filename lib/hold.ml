@@ -8,6 +8,20 @@ let is_hand = function
 
 let is_foot limb = not (is_hand limb)
 
+let grip_cost kind ~chalked =
+  match kind with
+  | Jug -> Config.jug_grip
+  | Crimp -> if chalked then Config.crimp_grip_chalked else Config.crimp_grip
+  | Sloper -> if chalked then Config.sloper_grip_chalked else Config.sloper_grip
+  | Rest -> Config.rest_grip
+  | Finish -> Config.finish_grip
+  | Chalk_refill -> Config.chalk_refill_grip
+  | Foothold -> 0 (* hands can't be here anyway *)
+  | Crumbling ->
+    (* inherits a base kind in Phase 5; no earlier wall uses it *)
+    Config.jug_grip
+;;
+
 let limb_compatible limb kind =
   match kind with
   | Jug | Rest -> true

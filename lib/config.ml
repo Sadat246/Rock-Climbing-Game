@@ -37,6 +37,7 @@ let sloper_grip = 8
 let sloper_grip_chalked = 3
 let rest_grip = 1
 let finish_grip = 3
+let chalk_refill_grip = 1
 
 (* Balance grip multipliers (unitless) *)
 let mult_stable = 1.0

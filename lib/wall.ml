@@ -33,24 +33,27 @@ let start_pose wall limbs =
   }
 ;;
 
-(* Two columns at x = 40/80: footholds at y = 30 (ids 0,1), jugs every 30
+(* Two columns at x = 40/80: footholds at y = 30 (ids 0,1), rungs every 30
    units from y = 60 to 270 (row r has ids 2r, 2r+1), finish pair at y = 300
-   (ids 18,19). Feet climb on the vacated jugs. 30-unit rungs keep every step
-   comfortably inside the torso-shift model's limits — under it the torso
-   trails each move, so 60-unit rungs would strand the feet behind
-   max_foot_above_torso (see TUNING_LOG 2026-07-15 Phase 2). *)
+   (ids 18,19). Feet climb on the vacated rungs. 30-unit rungs keep every
+   step comfortably inside the torso-shift model's limits — under it the
+   torso trails each move, so 60-unit rungs would strand the feet behind
+   max_foot_above_torso (see TUNING_LOG 2026-07-15 Phase 2).
+
+   The y = 120 and y = 210 rows (ids 6,7 and 12,13) are REST holds: with
+   stamina live (Phase 3) the full climb costs ~170 against a 100 budget, so
+   even the canary route must stop and shake out. *)
 let test_wall_ladder =
   let xs = [ 40.; 80. ] in
   let footholds = two_columns ~kind:Foothold ~first_id:0 ~xs ~ys:[ 30. ] in
-  let jugs =
-    two_columns
-      ~kind:Jug
-      ~first_id:2
-      ~xs
-      ~ys:[ 60.; 90.; 120.; 150.; 180.; 210.; 240.; 270. ]
+  let rungs =
+    List.concat_mapi
+      [ 60., Jug; 90., Jug; 120., Rest; 150., Jug; 180., Jug; 210., Rest; 240., Jug; 270., Jug ]
+      ~f:(fun row (y, kind) ->
+        List.mapi xs ~f:(fun col x -> mk (2 + (2 * row) + col) x y kind))
   in
   let finishes = two_columns ~kind:Finish ~first_id:18 ~xs ~ys:[ 300. ] in
-  { holds = Array.of_list (footholds @ jugs @ finishes)
+  { holds = Array.of_list (footholds @ rungs @ finishes)
   ; width = 120
   ; height = 320
   ; finish_y = 300.

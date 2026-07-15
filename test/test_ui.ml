@@ -39,10 +39,10 @@ let%expect_test "game move, reject, undo" =
   let game = new_game () in
   (match Game.move game Left_hand ~hold_id:16 with
    | `Rejected reason -> printf !"rejected: %{sexp:reject_reason}\n" reason
-   | `Moved _ -> print_endline "unexpectedly moved");
+   | `Moved _ | `Fell _ -> print_endline "unexpectedly moved");
   (match Game.move game Left_hand ~hold_id:4 with
-   | `Rejected _ -> print_endline "unexpectedly rejected"
-   | `Moved game' ->
+   | `Rejected _ | `Fell _ -> print_endline "unexpectedly rejected"
+   | `Moved (game', _cost) ->
      printf "moved, turn %d\n" (Game.current_state game').player.turn;
      (match Game.undo game' with
       | None -> print_endline "no undo?"
@@ -61,40 +61,65 @@ let%expect_test "game move, reject, undo" =
     |}]
 ;;
 
-(* Same 30-move ascent as test_scenarios: hands two rung-rows ahead, feet
-   following onto the vacated jugs. *)
+(* Same rest-managed ascent as test_scenarios: hands two rung-rows ahead,
+   feet following onto the vacated rungs, shaking out at the Rest rows. *)
 let ladder_script =
   let cycle c =
-    [ Left_hand, (2 * c) + 4
-    ; Right_hand, (2 * c) + 5
-    ; Left_foot, (2 * c) + 2
-    ; Right_foot, (2 * c) + 3
+    [ `M (Left_hand, (2 * c) + 4)
+    ; `M (Right_hand, (2 * c) + 5)
+    ; `M (Left_foot, (2 * c) + 2)
+    ; `M (Right_foot, (2 * c) + 3)
     ]
   in
-  List.concat_map (List.range 0 7) ~f:cycle @ [ Left_hand, 18; Right_hand, 19 ]
+  let cycles a b = List.concat_map (List.range a b) ~f:cycle in
+  cycles 0 2
+  @ [ `R; `R; `R ]
+  @ cycles 2 5
+  @ [ `R; `R; `R; `R; `R ]
+  @ cycles 5 7
+  @ [ `M (Left_hand, 18); `M (Right_hand, 19) ]
+;;
+
+let run_action game action =
+  match action with
+  | `R ->
+    (match Game.rest game with
+     | `Rested game -> game
+     | `Rejected reason -> raise_s [%message "rest rejected" (reason : reject_reason)])
+  | `M (limb, hold_id) ->
+    (match Game.move game limb ~hold_id with
+     | `Moved (game, _) -> game
+     | `Fell _ -> raise_s [%message "fell" (limb : limb) (hold_id : int)]
+     | `Rejected reason ->
+       raise_s [%message "rejected" (limb : limb) (hold_id : int) (reason : reject_reason)])
 ;;
 
 let%expect_test "win detection: full ascent through Game ends Won" =
-  let final =
-    List.fold ladder_script ~init:(new_game ()) ~f:(fun game (limb, hold_id) ->
-      match Game.move game limb ~hold_id with
-      | `Moved game -> game
-      | `Rejected reason ->
-        raise_s [%message "rejected" (limb : limb) (hold_id : int) (reason : reject_reason)])
-  in
+  let final = List.fold ladder_script ~init:(new_game ()) ~f:run_action in
   print_s [%sexp ((Game.current_state final).status : game_status)];
   (* one move before the last hand reaches the finish, we are still Playing *)
   let all_but_last = List.drop_last_exn ladder_script in
-  let almost =
-    List.fold all_but_last ~init:(new_game ()) ~f:(fun game (limb, hold_id) ->
-      match Game.move game limb ~hold_id with
-      | `Moved game -> game
-      | `Rejected _ -> game)
-  in
+  let almost = List.fold all_but_last ~init:(new_game ()) ~f:run_action in
   print_s [%sexp ((Game.current_state almost).status : game_status)];
   [%expect {|
     Won
     Playing
+    |}]
+;;
+
+let%expect_test "low stamina: risky holds are flagged desperate, not hidden" =
+  let start = { Wall.ladder_start with stamina = 6 } in
+  let gs =
+    Game.current_state (Game.create ~wall:Wall.test_wall_ladder ~start)
+  in
+  let ui = Ui.select_limb gs Left_hand in
+  printf !"candidates %{sexp:int list}\n" ui.candidates;
+  printf !"desperate  %{sexp:int list}\n" ui.desperate;
+  print_endline ui.message;
+  [%expect {|
+    candidates (3 4 5 6 7 8 9)
+    desperate  (3 5 7 9)
+    Left_hand: 7 reachable holds (4 would cost more than you have!)
     |}]
 ;;
 
@@ -106,25 +131,25 @@ let%expect_test "render_with_ui: highlighted target and HUD" =
         F   F
 
 
-        .   .
+        J   J
 
 
-        .   .
+        J   J
 
 
-        .   .
+        R   R
 
 
-        .   .
+        J   J
 
 
-        .   .
+        J   J
 
 
-        .   .
+        R   R
 
 
-        @   .
+        @   J
 
 
         h t H
@@ -137,7 +162,7 @@ let%expect_test "render_with_ui: highlighted target and HUD" =
     turn 0  stamina 100  chalk 5  status Playing
     limb Left_hand  target @ hold 4 (Jug)  reachable (3 4 5 6 7 8 9)
     now:   torso (60,45)  support (60,45)  d 0.0  Stable
-    after: torso (55,56)  support (60,52)  d 6.2  Stable
+    after: torso (55,56)  support (60,52)  d 6.2  Stable  cost 6 -> stamina 94
     Left_hand: 7 reachable holds
     |}]
 ;;

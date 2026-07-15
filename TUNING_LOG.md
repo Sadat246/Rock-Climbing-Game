@@ -18,6 +18,29 @@ ladder — feet land exactly 15 units above the torso mid-script. Fine for a
 canary, but when the real torso model (Phase 2) lands, re-check that ladder
 foot moves stay comfortably legal.
 
+## 2026-07-15 — Phase 3 stamina/grip: rest rows on the ladder, desperate-move falls
+Hypothesis: the §8 cost table would leave the 30-move ladder script winnable
+  on the 100 starting stamina.
+Change: NO constants changed. The climb costs ~170 (hand move 6 = 3 up + 1
+  stable upkeep + 2 jug grip; foot move 5), so this is a CONTENT fix again:
+  ladder rows y=120 and y=210 became Rest holds. Canary script: 30 moves + 8
+  rests = 38 turns, stamina at the top 38 (> 0, required for the win).
+Mechanic decision (owner request, recorded in CLAUDE.md Phase 3 note):
+  unaffordable-but-reachable moves are shown (red ring, "YOU WILL FALL"
+  preview) and committing to one is a FALL to the start, not a rejection.
+  attempt_move still rejects them (Insufficient_stamina) so the solver is
+  unaffected. Deterministic and fully telegraphed — no hidden punishment.
+Observed numbers worth keeping an eye on (targets get bands in Phase 4):
+  - straight-up hand move on jugs: 6; cross-body sideways: 7-8.
+  - rest +15/turn means ~3-5 turns of shaking out per stop — feels right.
+  - overhang_lean traverse costs 6,6,6,9,9,13 — Strained/Critical upkeep and
+    grip multipliers are now the dominant term on bad poses ✓ (the §1 causal
+    chain is live: bad balance → pricier grip → stamina drain).
+Result: ladder Won at 38 turns / 38 stamina; exhaustion falls verified both
+  ways (0-while-Strained falls; 0-while-Stable gets the grace + rest escape);
+  desperate falls + reset verified.
+Verdict: keep all constants. Bands: define in Phase 4 with the solver.
+
 ## 2026-07-15 — Phase 2 torso/spans/balance: ladder densified, gate findings
 Hypothesis: the Phase 0/1 ladder (60-unit rungs) would survive the real torso
   model (`torso_shift_factor 0.25`, reach from torso, §4.5 vertical limits).

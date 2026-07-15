@@ -105,4 +105,5 @@ type reject_reason =
   | Would_fall
   | Insufficient_stamina
   | Needs_chalk
+  | Cannot_rest (* resting needs a hand on a Rest hold, a foot attached, Stable *)
 [@@deriving sexp_of, compare, equal]

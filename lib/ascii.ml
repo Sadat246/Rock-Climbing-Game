@@ -1,9 +1,16 @@
 open! Core
 open Types
 
+(* Glyphs per CLAUDE.md Phase 1 table. *)
 let glyph_of_kind = function
+  | Jug -> 'J'
+  | Crimp -> 'c'
+  | Sloper -> 's'
+  | Foothold -> '.'
+  | Rest -> 'R'
+  | Crumbling -> '!'
+  | Chalk_refill -> '*'
   | Finish -> 'F'
-  | Jug | Crimp | Sloper | Foothold | Rest | Crumbling | Chalk_refill -> '.'
 ;;
 
 let limb_glyph = function
@@ -47,11 +54,13 @@ let status_line (gs : game_state) =
 
 let render gs = String.concat ~sep:"\n" (board gs @ [ status_line gs ])
 
-(* Post-move state for the highlighted target, via the single gate (pure). *)
+(* Post-move state + cost for the highlighted target, via the single gate
+   (pure). Desperate targets preview too — that's how the player sees the
+   fall coming. *)
 let preview (gs : game_state) (ui : Ui.t) =
   Option.bind (Ui.target ui) ~f:(fun id ->
     Option.bind (Wall.find gs.wall id) ~f:(fun hold ->
-      Movement.attempt_move ~wall:gs.wall ~broken:gs.broken_holds gs.player ui.limb hold
+      Movement.preview_move ~wall:gs.wall ~broken:gs.broken_holds gs.player ui.limb hold
       |> Result.ok))
 ;;
 
@@ -72,7 +81,7 @@ let balance_summary (gs : game_state) ~limbs ~torso =
 let render_with_ui gs (ui : Ui.t) =
   let target = Ui.target ui in
   let after = preview gs ui in
-  let ghost_torso = Option.map after ~f:(fun (p : player_state) -> p.torso) in
+  let ghost_torso = Option.map after ~f:(fun ((p : player_state), _) -> p.torso) in
   let target_line =
     match target with
     | None -> sprintf !"limb %{sexp:limb}  target -" ui.limb
@@ -95,8 +104,16 @@ let render_with_ui gs (ui : Ui.t) =
   let preview_line =
     match after with
     | None -> "after: -"
-    | Some (p : player_state) ->
-      sprintf "after: %s" (balance_summary gs ~limbs:p.limbs ~torso:p.torso)
+    | Some ((p : player_state), (cost : Movement.cost)) ->
+      let affordability =
+        if cost.total > gs.player.stamina
+        then sprintf "cost %d > stamina %d — YOU WILL FALL" cost.total gs.player.stamina
+        else sprintf "cost %d -> stamina %d" cost.total p.stamina
+      in
+      sprintf
+        "after: %s  %s"
+        (balance_summary gs ~limbs:p.limbs ~torso:p.torso)
+        affordability
   in
   String.concat
     ~sep:"\n"
