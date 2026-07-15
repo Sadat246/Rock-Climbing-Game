@@ -16,6 +16,10 @@ val draw : Climb.Types.game_state -> unit
     gray), and HUD lines incl. current/preview balance tinted by stability. *)
 val draw_with_ui : Climb.Types.game_state -> Climb.Ui.t -> unit
 
+(** Tumbling-figure animation from the pre-fall position ([from]) down to
+    the reset position ([landed]). Blocks for ~half a second; display only. *)
+val animate_fall : from:Climb.Types.game_state -> landed:Climb.Types.game_state -> unit
+
 type event =
   | Key of char
   | Click of int option (* hold id under the pointer, if any *)

@@ -483,14 +483,16 @@ Implemented as specced below, with owner-requested HARDCORE rules on top
   behind `Config.highlight_reachable` / `Config.show_move_preview`, default
   false, for debugging/tuning only.)
 - **Bad commitments are falls, not rejections.** At the Game layer:
+  out-of-reach lunges (`Out_of_reach`), overstretches (`Span_violation`),
   off-balance results (`Would_fall`), dragging a limb past its reach
   (`Limb_stranded`), unaffordable moves, and exhaustion in a Strained/
-  Critical pose all mean the climber comes off the wall and is INSTANTLY
-  back at the start pose (pre-fall state pushed to history so undo can
-  post-mortem). `attempt_move` still REJECTS all of these — the solver and
-  generator only ever see legal, survivable edges. Only physically
-  impossible placements (broken/occupied/wrong-limb/out-of-reach/span) are
-  polite rejections in play.
+  Critical pose ALL mean the climber comes off the wall and is INSTANTLY
+  back at the start pose, with a tumble animation in the Graphics window
+  (pre-fall state pushed to history so undo can post-mortem).
+  `attempt_move` still REJECTS all of these — the solver and generator only
+  ever see legal, survivable edges. The only polite rejections left in play
+  are what can't even be attempted: broken/missing hold, occupied hold,
+  wrong limb type, and resting off a Rest hold.
 - Grace turn: stamina 0 while Stable stays Playing (rest is the only
   escape); resting is `Movement.attempt_rest` (the gate's second entry
   point; solver edge later). Ladder content: rows y=120/210 became Rest

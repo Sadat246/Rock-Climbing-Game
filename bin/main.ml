@@ -29,43 +29,48 @@ let describe_move limb hold_id = function
     sprintf !"can't move %{sexp:limb} to hold %d: %{sexp:reject_reason}" limb hold_id reason
 ;;
 
-(* Shared command step: returns the new session + ui. *)
+(* Shared command step: returns the new session + ui, plus the pre-fall
+   state when the command ended in a fall (for the tumble animation). *)
 let apply_command (game : Game.t) (ui : Ui.t) command =
+  let no_fall (game, ui) = game, ui, None in
   match command with
-  | `Select limb -> game, Ui.select_limb game.current limb
-  | `Cycle step -> game, (if step >= 0 then Ui.next ui else Ui.prev ui)
+  | `Select limb -> no_fall (game, Ui.select_limb game.current limb)
+  | `Cycle step -> no_fall (game, (if step >= 0 then Ui.next ui else Ui.prev ui))
   | `Undo ->
-    (match Game.undo game with
-     | None -> game, Ui.with_message ui "nothing to undo"
-     | Some game -> game, Ui.with_message (Ui.select_limb game.current ui.limb) "undone")
+    no_fall
+      (match Game.undo game with
+       | None -> game, Ui.with_message ui "nothing to undo"
+       | Some game -> game, Ui.with_message (Ui.select_limb game.current ui.limb) "undone")
   | `Rest ->
-    (match game.current.status with
-     | Won | Fallen _ -> game, Ui.with_message ui "the climb is over — m restarts, u undoes"
-     | Playing ->
-       (match Game.rest game with
-        | `Rested game' ->
-          let message =
-            sprintf "rested: stamina %d" (Game.current_state game').player.stamina
-          in
-          game', Ui.with_message (Ui.select_limb game'.current ui.limb) message
-        | `Rejected _ ->
-          ( game
-          , Ui.with_message
-              ui
-              "can't rest: need a hand on a Rest hold, a foot on, and Stable" )))
+    no_fall
+      (match game.current.status with
+       | Won | Fallen _ -> game, Ui.with_message ui "the climb is over - u undoes"
+       | Playing ->
+         (match Game.rest game with
+          | `Rested game' ->
+            let message =
+              sprintf "rested: stamina %d" (Game.current_state game').player.stamina
+            in
+            game', Ui.with_message (Ui.select_limb game'.current ui.limb) message
+          | `Rejected _ ->
+            ( game
+            , Ui.with_message
+                ui
+                "can't rest: need a hand on a Rest hold, a foot on, and Stable" )))
   | `Move (limb, hold_id) ->
     (match game.current.status with
-     | Won -> game, Ui.with_message ui "already won — m to restart, u to undo, q to quit"
+     | Won ->
+       no_fall (game, Ui.with_message ui "already won - m to restart, u to undo, q to quit")
      | Fallen _ ->
        (* unreachable: falls auto-reset to the start *)
        let game = Game.reset game in
-       game, Ui.with_message (Ui.init game.current) "back to the start — climb!"
+       no_fall (game, Ui.with_message (Ui.init game.current) "back to the start - climb!")
      | Playing ->
        (match Game.move game limb ~hold_id with
         | `Moved (game', cost) ->
           let message =
             match game'.current.status with
-            | Won -> "YOU WON! both hands on the finish — m to restart, q to quit"
+            | Won -> "YOU WON! both hands on the finish - m to restart, q to quit"
             | Fallen reason -> sprintf "FELL: %s" reason
             | Playing ->
               sprintf
@@ -75,14 +80,15 @@ let apply_command (game : Game.t) (ui : Ui.t) command =
                 cost.total
                 (Game.current_state game').player.stamina
           in
-          game', Ui.with_message (Ui.select_limb game'.current limb) message
+          no_fall (game', Ui.with_message (Ui.select_limb game'.current limb) message)
         | `Fell (game', reason) ->
-          (* already back at the start pose *)
+          (* session already reset to the start; head of history = pre-fall *)
           ( game'
           , Ui.with_message
               (Ui.select_limb game'.current limb)
-              (sprintf "YOU FELL — %s. Back to the start." reason) )
-        | `Rejected _ as r -> game, Ui.with_message ui (describe_move limb hold_id r)))
+              (sprintf "YOU FELL: %s. Back to the start." reason)
+          , List.hd game'.history )
+        | `Rejected _ as r -> no_fall (game, Ui.with_message ui (describe_move limb hold_id r))))
 ;;
 
 let confirm_move (ui : Ui.t) =
@@ -132,8 +138,12 @@ let rec graphics_loop game ui =
   | `None -> graphics_loop game ui
   | `Focus hold_id -> graphics_loop game (Ui.focus ui hold_id)
   | `Command c ->
-    let game, ui = apply_command game ui c in
-    graphics_loop game ui
+    let game', ui, fell_from = apply_command game ui c in
+    Option.iter fell_from ~f:(fun pre ->
+      Climb_graphics.Graphics_view.animate_fall
+        ~from:{ pre with status = Playing }
+        ~landed:(Game.current_state game'));
+    graphics_loop game' ui
 ;;
 
 (* ----- ASCII frontend ----- *)
@@ -167,7 +177,8 @@ let rec ascii_loop game ui =
          game
          (Ui.with_message ui "commands: 1-4 n p m r u q, or '<limb#> <hold_id>'")
      | `Command c ->
-       let game, ui = apply_command game ui c in
+       (* no animation in the terminal: the message carries the fall *)
+       let game, ui, (_ : game_state option) = apply_command game ui c in
        ascii_loop game ui)
 ;;
 

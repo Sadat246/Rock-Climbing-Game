@@ -37,7 +37,8 @@ let%expect_test "cycling wraps both directions" =
 
 let%expect_test "game move, reject, undo" =
   let game = new_game () in
-  (match Game.move game Left_hand ~hold_id:16 with
+  (* a foothold is un-grabbable by a hand: still a polite rejection *)
+  (match Game.move game Left_hand ~hold_id:0 with
    | `Rejected reason -> printf !"rejected: %{sexp:reject_reason}\n" reason
    | `Moved _ | `Fell _ -> print_endline "unexpectedly moved");
   (match Game.move game Left_hand ~hold_id:4 with
@@ -54,7 +55,7 @@ let%expect_test "game move, reject, undo" =
              (Game.current_state game).player)));
   printf "undo at start: %b\n" (Option.is_none (Game.undo game));
   [%expect {|
-    rejected: Out_of_reach
+    rejected: Wrong_limb_for_hold
     moved, turn 1
     undo restores start: true
     undo at start: true

@@ -238,6 +238,38 @@ let draw_with_ui (gs : game_state) (ui : Ui.t) =
   Graphics.synchronize ()
 ;;
 
+(* The tumble: a red figure with flailing limbs accelerating from the
+   pre-fall torso position down to the start pose. Pure display — the game
+   state has already been reset by the time this runs. *)
+let animate_fall ~(from : game_state) ~(landed : game_state) =
+  let wall = landed.wall in
+  let src = from.player.torso in
+  let dst = landed.player.torso in
+  let frames = Config.fall_animation_frames in
+  for i = 1 to frames do
+    let t = Float.of_int i /. Float.of_int frames in
+    let pos =
+      (* gravity: ease-in on the vertical, linear drift on the horizontal *)
+      { x = src.x +. ((dst.x -. src.x) *. t); y = src.y +. ((dst.y -. src.y) *. t *. t) }
+    in
+    Graphics.clear_graph ();
+    Array.iter wall.holds ~f:(draw_hold wall ~broken:landed.broken_holds);
+    let x, y = to_screen wall pos in
+    Graphics.set_color Graphics.red;
+    Graphics.set_line_width 2;
+    let spin = Float.of_int i *. 0.8 in
+    List.iter [ 0.4; 1.9; 3.5; 5.1 ] ~f:(fun limb_angle ->
+      let a = spin +. limb_angle in
+      Graphics.moveto x y;
+      Graphics.lineto
+        (x + Int.of_float (13. *. Float.cos a))
+        (y + Int.of_float (13. *. Float.sin a)));
+    Graphics.fill_circle x y 5;
+    Graphics.synchronize ();
+    ignore (Core_unix.nanosleep Config.fall_frame_delay_s : float)
+  done
+;;
+
 (* Screen-position -> nearest hold within the click radius. *)
 let hold_at (wall : wall) ~mouse_x ~mouse_y =
   Array.fold wall.holds ~init:None ~f:(fun best h ->

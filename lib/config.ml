@@ -88,3 +88,7 @@ let click_radius_px = 12 (* mouse hit radius around a hold, pixels; 5–20 *)
    IS the puzzle, so both default OFF. Flip on for debugging/tuning only. *)
 let highlight_reachable = false (* rings on holds the selected limb could take *)
 let show_move_preview = false (* ghost torso + post-move balance/cost readout *)
+
+(* Fall animation (Graphics window only) *)
+let fall_animation_frames = 16 (* tumble frames; 8–30 *)
+let fall_frame_delay_s = 0.035 (* seconds per frame; 0.02–0.06 *)

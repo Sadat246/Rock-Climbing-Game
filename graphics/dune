@@ -1,5 +1,5 @@
 (library
  (name climb_graphics)
- (libraries climb core graphics)
+ (libraries climb core core_unix graphics)
  (preprocess
   (pps ppx_jane)))

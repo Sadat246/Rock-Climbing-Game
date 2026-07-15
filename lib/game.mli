@@ -16,14 +16,15 @@ val current_state : t -> Types.game_state
     [`Moved] carries the move's cost for HUD messages.
 
     [`Fell reason]: the climber went for it and came off the wall — an
-    off-balance position ([Would_fall]), a stranded limb ([Limb_stranded]),
-    a move the tank couldn't cover, or exhaustion in a bad pose. The
-    returned session is ALREADY back at the start pose (owner decision:
-    falls return you to the start, immediately); the pre-fall state is
-    pushed onto the history so undo can still inspect what went wrong.
+    out-of-reach lunge, an overstretch ([Span_violation]), an off-balance
+    position ([Would_fall]), a stranded limb ([Limb_stranded]), a move the
+    tank couldn't cover, or exhaustion in a bad pose. The returned session
+    is ALREADY back at the start pose (owner decision: falls return you to
+    the start, immediately); the pre-fall state is pushed onto the history
+    so undo can still inspect what went wrong.
 
-    [`Rejected] is only for the physically impossible (broken/occupied hold,
-    wrong limb, beyond reach, span limits) and leaves the session unchanged. *)
+    [`Rejected] is only for what can't even be attempted (broken/missing
+    hold, occupied hold, wrong limb type) and leaves the session unchanged. *)
 val move
   :  t
   -> Types.limb

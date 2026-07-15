@@ -75,6 +75,10 @@ let move t limb ~hold_id =
          t
          ~pre:gs
          (sprintf "reaching hold %d yanked another limb off the wall" hold_id)
+     | Error Out_of_reach ->
+       fall t ~pre:gs (sprintf "hold %d was out of reach - you lunged and missed" hold_id)
+     | Error Span_violation ->
+       fall t ~pre:gs (sprintf "you overstretched going for hold %d and came off" hold_id)
      | Error reason -> `Rejected reason
      | Ok (player, cost) ->
        if cost.total > gs.player.stamina

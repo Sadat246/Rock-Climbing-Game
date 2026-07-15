@@ -101,6 +101,64 @@ let%expect_test "stranding another limb is also a fall" =
     |}]
 ;;
 
+let%expect_test "lunging for an out-of-reach hold is a fall, not a rejection" =
+  let start = Wall.ladder_start in
+  let game = ladder_game () in
+  (* jug 16 (40,270) is ~225 units away — a wild lunge *)
+  (match Game.move game Left_hand ~hold_id:16 with
+   | `Fell (game, reason) ->
+     printf "%s\n" reason;
+     printf !"back at start %b\n" (back_at_start game start)
+   | `Moved _ -> print_endline "unexpectedly moved"
+   | `Rejected r -> printf !"unexpectedly rejected: %{sexp:reject_reason}\n" r);
+  [%expect {|
+    hold 16 was out of reach - you lunged and missed
+    back at start true
+    |}]
+;;
+
+let%expect_test "overstretching the body span is a fall too" =
+  (* span_wall pose from test_movement: grabbing the far jug would put the
+     hands 151 apart (max 150) *)
+  let mk id x y kind = { id; position = { x; y }; kind; durability = None } in
+  let span_wall =
+    { holds =
+        [| mk 0 0. 100. Jug
+         ; mk 1 60. 100. Jug
+         ; mk 2 151. 100. Jug
+         ; mk 3 65. 30. Foothold
+         ; mk 4 75. 30. Foothold
+        |]
+    ; width = 200
+    ; height = 140
+    ; finish_y = 140.
+    }
+  in
+  let limbs =
+    { left_hand = Some 0; right_hand = Some 1; left_foot = Some 3; right_foot = Some 4 }
+  in
+  let start =
+    { Wall.ladder_start with
+      limbs
+    ; torso =
+        Geometry.average
+          (List.map (Player.attached limbs) ~f:(fun (_, id) ->
+             Wall.position_exn span_wall id))
+    }
+  in
+  let game = Game.create ~wall:span_wall ~start in
+  (match Game.move game Right_hand ~hold_id:2 with
+   | `Fell (game, reason) ->
+     printf "%s\n" reason;
+     printf !"back at start %b\n" (back_at_start game start)
+   | `Moved _ -> print_endline "unexpectedly moved"
+   | `Rejected r -> printf !"unexpectedly rejected: %{sexp:reject_reason}\n" r);
+  [%expect {|
+    you overstretched going for hold 2 and came off
+    back at start true
+    |}]
+;;
+
 let%expect_test "exact-cost move to 0 stamina: Stable = grace, then doom" =
   let game = ladder_game ~stamina:6 () in
   (match Game.move game Left_hand ~hold_id:4 with
