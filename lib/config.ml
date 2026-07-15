@@ -109,3 +109,11 @@ let show_move_preview = false (* ghost torso + post-move balance/cost readout *)
 (* Fall animation (Graphics window only) *)
 let fall_animation_frames = 16 (* tumble frames; 8–30 *)
 let fall_frame_delay_s = 0.035 (* seconds per frame; 0.02–0.06 *)
+
+(* Phase 7 body proportions — DISPLAY ONLY, world units; gameplay reach is
+   unchanged. Segments long enough to cover hand_reach when straightened. *)
+let torso_half_height = 11. (* hip/shoulder offset from torso center *)
+let shoulder_half_width = 5.
+let hip_half_width = 4.
+let arm_segment = 62. (* upper = lower; 2x must exceed hand_reach + offsets *)
+let leg_segment = 52.
