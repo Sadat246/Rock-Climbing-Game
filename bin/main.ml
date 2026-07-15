@@ -312,7 +312,45 @@ let print_route ~wall ~start actions =
   printf !"final status: %{sexp:game_status}\n" (Game.current_state final).status
 ;;
 
-let solve_wall name =
+(* Replay a solver route visually: the climber walks the optimal line in the
+   Graphics window, one action per render_delay. Falls back to the text
+   trace when no display is reachable. *)
+let watch_route ~wall ~start actions =
+  match Climb_graphics.Graphics_view.init wall with
+  | Error message ->
+    printf "no graphics window (%s) - text trace instead:\n" message;
+    print_route ~wall ~start actions
+  | Ok () ->
+    let step game action =
+      match (action : Solver.action) with
+      | Rest ->
+        (match Game.rest game with
+         | `Rested g -> g
+         | `Rejected r -> raise_s [%message "solver route rest rejected" (r : reject_reason)])
+      | Move (limb, hold_id) ->
+        (match Game.move game limb ~hold_id with
+         | `Moved (g, _) -> g
+         | `Fell (_, reason) -> raise_s [%message "solver route fell" (reason : string)]
+         | `Rejected r -> raise_s [%message "solver route rejected" (r : reject_reason)])
+    in
+    let game = Game.create ~wall ~start in
+    Climb_graphics.Graphics_view.draw (Game.current_state game);
+    ignore (Core_unix.nanosleep Config.render_delay_s : float);
+    let final =
+      List.fold actions ~init:game ~f:(fun game action ->
+        let game = step game action in
+        Climb_graphics.Graphics_view.draw (Game.current_state game);
+        ignore (Core_unix.nanosleep Config.render_delay_s : float);
+        game)
+    in
+    printf
+      !"route finished: %{sexp:game_status} - press any key in the window to close\n%!"
+      (Game.current_state final).status;
+    Climb_graphics.Graphics_view.wait_for_key ();
+    Climb_graphics.Graphics_view.close ()
+;;
+
+let solve_wall ?(watch = false) name =
   match Wall.find_by_name name with
   | None ->
     printf
@@ -328,7 +366,8 @@ let solve_wall name =
        printf "gave up at the state cap (%d states)\n" states_expanded
      | Solution { actions; metrics } ->
        print_route ~wall ~start actions;
-       printf !"%{sexp:Solver.metrics}\n" metrics)
+       printf !"%{sexp:Solver.metrics}\n%!" metrics;
+       if watch then watch_route ~wall ~start actions)
 ;;
 
 let wall_arg args ~default =
@@ -376,7 +415,9 @@ let run_play args =
 let () =
   let args = Sys.get_argv () |> Array.to_list |> List.tl_exn in
   match args with
-  | "solve" :: rest -> solve_wall (wall_arg rest ~default:"ladder")
+  | "solve" :: rest ->
+    let watch = List.mem rest "--watch" ~equal:String.equal in
+    solve_wall ~watch (wall_arg rest ~default:"ladder")
   | "tune" :: _ -> List.iter Wall.all ~f:(fun (name, _) -> solve_wall name)
   | args -> run_play args
 ;;
