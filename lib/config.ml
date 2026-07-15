@@ -76,7 +76,9 @@ let solver_critical_edge_weight = 5
 
 (* Rendering — display only, never gameplay *)
 let ascii_cell = 10. (* world units per ASCII grid cell; 5–20 *)
-let pixels_per_unit = 2. (* Graphics-window pixels per world unit; 1–4 *)
-let window_margin_px = 20 (* Graphics-window border margin, pixels; 0–50 *)
+let pixels_per_unit = 2.5 (* Graphics-window pixels per world unit; 1–4 *)
+let window_margin_px = 24 (* Graphics-window border margin, pixels; 0–50 *)
+let hud_band_px = 64 (* height of the HUD strip above the wall, pixels; 48–96 *)
+let min_window_width_px = 460 (* so HUD text never clips; 400–600 *)
 let render_delay_s = 0.4 (* seconds between scripted moves on screen; 0.1–1.0 *)
-let click_radius_px = 10 (* mouse hit radius around a hold, pixels; 5–20 *)
+let click_radius_px = 12 (* mouse hit radius around a hold, pixels; 5–20 *)
