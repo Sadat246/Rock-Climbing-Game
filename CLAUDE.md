@@ -475,19 +475,27 @@ Original spec:
 - Tests: scripted poses with known expected stability (see §6.2).
 
 ### Phase 3 — Stamina + grip ✅ (done 2026-07-15)
-Implemented as specced below, with one owner-requested risk mechanic on top:
-**desperate moves.** The gate (`attempt_move`) still rejects unaffordable
-moves with `Insufficient_stamina` (so the solver never takes them), but the
-Game layer treats committing to one as the climber going for it anyway — the
-grip gives out and the status becomes `Fallen`; confirming from a Fallen
-state resets to the start pose. The UI flags desperate holds with RED rings
-and a "cost N > stamina M — YOU WILL FALL" preview line, so falls are always
-telegraphed, never hidden. Grace turn semantics: stamina 0 while Stable stays
-Playing (rest is the only escape); 0 while Strained/Critical falls
-immediately. Resting is `Movement.attempt_rest` (the gate's second entry
-point; solver edge later). Ladder content: rows y=120/210 became Rest holds —
-the full canary climb costs ~170 vs a 100 budget, so even it must shake out
-(script: 38 turns incl. 8 rests, wins with 38 left).
+Implemented as specced below, with owner-requested HARDCORE rules on top
+(2026-07-15, supersedes the ghost-preview UX requirement in §4.4):
+- **No hints.** The UI never reveals reachability, cost, or post-move
+  balance: no candidate rings, no ghost torso, no "after" line. The cursor
+  ranges over EVERY hold; attempting is how you learn. (Both hints survive
+  behind `Config.highlight_reachable` / `Config.show_move_preview`, default
+  false, for debugging/tuning only.)
+- **Bad commitments are falls, not rejections.** At the Game layer:
+  off-balance results (`Would_fall`), dragging a limb past its reach
+  (`Limb_stranded`), unaffordable moves, and exhaustion in a Strained/
+  Critical pose all mean the climber comes off the wall and is INSTANTLY
+  back at the start pose (pre-fall state pushed to history so undo can
+  post-mortem). `attempt_move` still REJECTS all of these — the solver and
+  generator only ever see legal, survivable edges. Only physically
+  impossible placements (broken/occupied/wrong-limb/out-of-reach/span) are
+  polite rejections in play.
+- Grace turn: stamina 0 while Stable stays Playing (rest is the only
+  escape); resting is `Movement.attempt_rest` (the gate's second entry
+  point; solver edge later). Ladder content: rows y=120/210 became Rest
+  holds — the full canary climb costs ~170 vs a 100 budget (script: 38
+  turns incl. 8 rests, wins with 38 left).
 
 Original spec:
 - Movement costs, pose upkeep, grip costs with balance multiplier, exhaustion falls,

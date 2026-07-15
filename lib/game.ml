@@ -50,6 +50,16 @@ let compute_status (gs : game_state) =
   else gs.status
 ;;
 
+(* A fall sends the climber straight back to the start pose (fresh session
+   state); the pre-fall state goes onto the history so undo can replay the
+   mistake. *)
+let fall t ~(pre : game_state) reason =
+  let fresh =
+    { pre with player = t.start; broken_holds = pre.broken_holds; status = Playing }
+  in
+  `Fell ({ t with current = fresh; history = pre :: t.history }, reason)
+;;
+
 let move t limb ~hold_id =
   let gs = t.current in
   match Wall.find gs.wall hold_id with
@@ -58,28 +68,33 @@ let move t limb ~hold_id =
     (match
        Movement.preview_move ~wall:gs.wall ~broken:gs.broken_holds gs.player limb hold
      with
+     | Error Would_fall ->
+       fall t ~pre:gs (sprintf "you lost your balance lunging for hold %d" hold_id)
+     | Error Limb_stranded ->
+       fall
+         t
+         ~pre:gs
+         (sprintf "reaching hold %d yanked another limb off the wall" hold_id)
      | Error reason -> `Rejected reason
      | Ok (player, cost) ->
        if cost.total > gs.player.stamina
-       then (
+       then
          (* The desperate move: physically possible, but the tank is empty —
             the grip gives out mid-move. *)
-         let reason =
-           sprintf
-             "grip gave out reaching hold %d (needed %d stamina, had %d)"
-             hold_id
-             cost.total
-             gs.player.stamina
-         in
-         `Fell
-           { t with
-             current = { gs with status = Fallen reason }
-           ; history = gs :: t.history
-           })
+         fall
+           t
+           ~pre:gs
+           (sprintf
+              "grip gave out reaching hold %d (needed %d stamina, had %d)"
+              hold_id
+              cost.total
+              gs.player.stamina)
        else (
          let next = { gs with player } in
-         let next = { next with status = compute_status next } in
-         `Moved ({ t with current = next; history = gs :: t.history }, cost)))
+         match compute_status next with
+         | Fallen reason -> fall t ~pre:gs reason
+         | (Playing | Won) as status ->
+           `Moved ({ t with current = { next with status }; history = gs :: t.history }, cost)))
 ;;
 
 let rest t =

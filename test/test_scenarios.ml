@@ -190,6 +190,6 @@ let%expect_test "overhang_lean: critical pose, then the wall says no" =
     turn 4  Right_hand -> 7   d  24.2  Strained
     turn 5  Left_hand  -> 8   d  33.2  Strained
     turn 6  Right_hand -> 3   d  41.1  Critical
-    rejected: Left_hand -> 9 (Out_of_reach)
+    rejected: Left_hand -> 9 (Limb_stranded)
     |}]
 ;;

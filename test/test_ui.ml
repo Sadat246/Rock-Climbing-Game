@@ -4,7 +4,7 @@ open Climb.Types
 
 let new_game () = Game.create ~wall:Wall.test_wall_ladder ~start:Wall.ladder_start
 
-let%expect_test "reachable candidates per limb from the ladder start" =
+let%expect_test "cursor candidates per limb: all holds except the limb's own" =
   let gs = Game.current_state (new_game ()) in
   List.iter all_of_limb ~f:(fun limb ->
     let ui = Ui.select_limb gs limb in
@@ -13,10 +13,10 @@ let%expect_test "reachable candidates per limb from the ladder start" =
       (Sexp.to_string [%sexp (limb : limb)])
       ui.candidates);
   [%expect {|
-    Left_hand  (3 4 5 6 7 8 9)
-    Right_hand (2 4 5 6 7 8 9)
-    Left_foot  (1 2 3)
-    Right_foot (0 2 3)
+    Left_hand  (0 1 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19)
+    Right_hand (0 1 2 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19)
+    Left_foot  (1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19)
+    Right_foot (0 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19)
     |}]
 ;;
 
@@ -107,19 +107,15 @@ let%expect_test "win detection: full ascent through Game ends Won" =
     |}]
 ;;
 
-let%expect_test "low stamina: risky holds are flagged desperate, not hidden" =
-  let start = { Wall.ladder_start with stamina = 6 } in
-  let gs =
-    Game.current_state (Game.create ~wall:Wall.test_wall_ladder ~start)
-  in
+let%expect_test "no hints: the cursor ranges over every hold on the wall" =
+  let gs = Game.current_state (new_game ()) in
   let ui = Ui.select_limb gs Left_hand in
+  (* everything except the hold the left hand is on (id 2) — reachable or not *)
   printf !"candidates %{sexp:int list}\n" ui.candidates;
-  printf !"desperate  %{sexp:int list}\n" ui.desperate;
   print_endline ui.message;
   [%expect {|
-    candidates (3 4 5 6 7 8 9)
-    desperate  (3 5 7 9)
-    Left_hand: 7 reachable holds (4 would cost more than you have!)
+    candidates (0 1 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19)
+    Left_hand selected
     |}]
 ;;
 
@@ -149,20 +145,19 @@ let%expect_test "render_with_ui: highlighted target and HUD" =
         R   R
 
 
-        @   J
+        J   J
 
 
-        h t H
+        h   H
           T
 
-        f   Q
+        f   @
 
 
 
     turn 0  stamina 100  chalk 5  status Playing
-    limb Left_hand  target @ hold 4 (Jug)  reachable (3 4 5 6 7 8 9)
+    limb Left_hand  target @ hold 1 (Foothold)
     now:   torso (60,45)  support (60,45)  d 0.0  Stable
-    after: torso (55,56)  support (60,52)  d 6.2  Stable  cost 6 -> stamina 94
-    Left_hand: 7 reachable holds
+    Left_hand selected
     |}]
 ;;

@@ -195,13 +195,20 @@ let draw_hud (gs : game_state) (ui : Ui.t) ~after =
 let draw_with_ui (gs : game_state) (ui : Ui.t) =
   draw_scene gs;
   let wall = gs.wall in
-  (* Reachable holds for the selected limb: pale green rings, or RED when
-     committing would exceed remaining stamina (= a fall). *)
-  Graphics.set_line_width 1;
-  List.iter ui.candidates ~f:(fun id ->
-    Graphics.set_color (if Ui.is_desperate ui id then Graphics.red else pale_green);
-    let x, y = to_screen wall (Wall.position_exn wall id) in
-    Graphics.draw_circle x y 8);
+  (* Owner-disabled hint (Config.highlight_reachable): rings on the holds the
+     selected limb could actually take. Debug/tuning only. *)
+  if Config.highlight_reachable
+  then (
+    Graphics.set_color pale_green;
+    Graphics.set_line_width 1;
+    Array.iter wall.holds ~f:(fun h ->
+      match
+        Movement.preview_move ~wall ~broken:gs.broken_holds gs.player ui.limb h
+      with
+      | Error _ -> ()
+      | Ok _ ->
+        let x, y = to_screen wall h.position in
+        Graphics.draw_circle x y 8));
   (* Selected limb's line redrawn in green, thicker. *)
   Graphics.set_color green;
   Graphics.set_line_width 3;
@@ -210,14 +217,15 @@ let draw_with_ui (gs : game_state) (ui : Ui.t) =
     let x, y = to_screen wall (Wall.position_exn wall id) in
     Graphics.moveto tx ty;
     Graphics.lineto x y);
-  (* Highlighted target hold: bold ring (red when desperate). *)
+  (* Cursor ring: just where you're pointing — says nothing about whether the
+     move is possible. *)
+  Graphics.set_color green;
   Graphics.set_line_width 2;
   Option.iter (Ui.target ui) ~f:(fun id ->
-    Graphics.set_color (if Ui.is_desperate ui id then Graphics.red else green);
     let x, y = to_screen wall (Wall.position_exn wall id) in
     Graphics.draw_circle x y 9);
-  (* Ghost torso: where the torso would shift if the move is confirmed. *)
-  let after = preview gs ui in
+  (* Ghost torso preview: owner-disabled hint (Config.show_move_preview). *)
+  let after = if Config.show_move_preview then preview gs ui else None in
   Option.iter after ~f:(fun ((p : player_state), (_ : Movement.cost)) ->
     let gx, gy = to_screen wall p.torso in
     Graphics.set_color ghost_gray;

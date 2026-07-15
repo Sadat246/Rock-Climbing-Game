@@ -57,7 +57,7 @@ let apply_command (game : Game.t) (ui : Ui.t) command =
     (match game.current.status with
      | Won -> game, Ui.with_message ui "already won — m to restart, u to undo, q to quit"
      | Fallen _ ->
-       (* the fall consequence: back to the very start *)
+       (* unreachable: falls auto-reset to the start *)
        let game = Game.reset game in
        game, Ui.with_message (Ui.init game.current) "back to the start — climb!"
      | Playing ->
@@ -66,7 +66,7 @@ let apply_command (game : Game.t) (ui : Ui.t) command =
           let message =
             match game'.current.status with
             | Won -> "YOU WON! both hands on the finish — m to restart, q to quit"
-            | Fallen reason -> sprintf "FELL: %s — m to restart, u to undo" reason
+            | Fallen reason -> sprintf "FELL: %s" reason
             | Playing ->
               sprintf
                 !"moved %{sexp:limb} to hold %d (cost %d, stamina %d)"
@@ -76,16 +76,12 @@ let apply_command (game : Game.t) (ui : Ui.t) command =
                 (Game.current_state game').player.stamina
           in
           game', Ui.with_message (Ui.select_limb game'.current limb) message
-        | `Fell game' ->
-          let reason =
-            match game'.current.status with
-            | Fallen reason -> reason
-            | Playing | Won -> "?"
-          in
+        | `Fell (game', reason) ->
+          (* already back at the start pose *)
           ( game'
           , Ui.with_message
               (Ui.select_limb game'.current limb)
-              (sprintf "YOU FELL — %s. m or click to restart, u to undo" reason) )
+              (sprintf "YOU FELL — %s. Back to the start." reason) )
         | `Rejected _ as r -> game, Ui.with_message ui (describe_move limb hold_id r)))
 ;;
 
@@ -97,21 +93,17 @@ let confirm_move (ui : Ui.t) =
 
 (* ----- Graphics frontend (keyboard + mouse) ----- *)
 
-(* Clicking a hold: candidate -> move there; a hold one of our limbs is on ->
-   select that limb; any other hold -> ask the gate why it's illegal and show
-   the typed reason. Hovering a candidate points the cursor (and ghost torso
-   preview) at it. *)
+(* Clicking a hold one of our limbs is on selects that limb; clicking any
+   other hold ATTEMPTS the move with the selected limb — no pre-screening,
+   the wall itself is the teacher. *)
 let click_command (gs : game_state) (ui : Ui.t) hold_id =
-  if List.mem ui.candidates hold_id ~equal:Int.equal
-  then `Command (`Move (ui.limb, hold_id))
-  else (
-    let limb_on_hold =
-      List.find_map (Player.attached gs.player.limbs) ~f:(fun (limb, id) ->
-        Option.some_if (id = hold_id) limb)
-    in
-    match limb_on_hold with
-    | Some limb -> `Command (`Select limb)
-    | None -> `Command (`Move (ui.limb, hold_id)))
+  let limb_on_hold =
+    List.find_map (Player.attached gs.player.limbs) ~f:(fun (limb, id) ->
+      Option.some_if (id = hold_id) limb)
+  in
+  match limb_on_hold with
+  | Some limb -> `Command (`Select limb)
+  | None -> `Command (`Move (ui.limb, hold_id))
 ;;
 
 let rec graphics_loop game ui =
@@ -241,10 +233,8 @@ let run_demo ~ascii ~no_wait game =
              hold_id
              reason;
            game
-         | `Fell game ->
-           (match (Game.current_state game).status with
-            | Fallen reason -> printf "FELL: %s\n" reason
-            | Playing | Won -> ());
+         | `Fell (game, reason) ->
+           printf "FELL: %s (back to the start)\n" reason;
            game
          | `Moved (game, cost) ->
            let gs = Game.current_state game in

@@ -83,3 +83,8 @@ let hud_band_px = 64 (* height of the HUD strip above the wall, pixels; 48–96 
 let min_window_width_px = 460 (* so HUD text never clips; 400–600 *)
 let render_delay_s = 0.4 (* seconds between scripted moves on screen; 0.1–1.0 *)
 let click_radius_px = 12 (* mouse hit radius around a hold, pixels; 5–20 *)
+
+(* Hint toggles — owner decision 2026-07-15: figuring out where limbs can go
+   IS the puzzle, so both default OFF. Flip on for debugging/tuning only. *)
+let highlight_reachable = false (* rings on holds the selected limb could take *)
+let show_move_preview = false (* ghost torso + post-move balance/cost readout *)

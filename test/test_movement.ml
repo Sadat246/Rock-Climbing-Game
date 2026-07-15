@@ -72,7 +72,7 @@ let%expect_test "no-teleport post-check: a move may not strand another limb" =
      beyond foot_reach. *)
   let lagged = { start with torso = { x = 60.; y = 110. } } in
   print_result (try_move ~player:lagged Left_hand 8);
-  [%expect {| REJECTED Out_of_reach |}]
+  [%expect {| REJECTED Limb_stranded |}]
 ;;
 
 let%expect_test "both hands may share a jug; not a crimp" =

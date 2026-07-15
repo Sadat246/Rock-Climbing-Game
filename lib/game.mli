@@ -13,15 +13,22 @@ val current_state : t -> Types.game_state
 
 (** Move a limb to the hold with [hold_id], via the single gate.
 
-    [`Moved] carries the move's cost for HUD messages. [`Fell] is a committed
-    move the climber could not afford — the grip gives out and the status
-    becomes [Fallen] (restart or undo from there). Impossible moves are
-    [`Rejected] and leave the session unchanged. *)
+    [`Moved] carries the move's cost for HUD messages.
+
+    [`Fell reason]: the climber went for it and came off the wall — an
+    off-balance position ([Would_fall]), a stranded limb ([Limb_stranded]),
+    a move the tank couldn't cover, or exhaustion in a bad pose. The
+    returned session is ALREADY back at the start pose (owner decision:
+    falls return you to the start, immediately); the pre-fall state is
+    pushed onto the history so undo can still inspect what went wrong.
+
+    [`Rejected] is only for the physically impossible (broken/occupied hold,
+    wrong limb, beyond reach, span limits) and leaves the session unchanged. *)
 val move
   :  t
   -> Types.limb
   -> hold_id:int
-  -> [ `Moved of t * Movement.cost | `Fell of t | `Rejected of Types.reject_reason ]
+  -> [ `Moved of t * Movement.cost | `Fell of t * string | `Rejected of Types.reject_reason ]
 
 (** Rest (§4.3): hand on a Rest hold + a foot attached + Stable. *)
 val rest : t -> [ `Rested of t | `Rejected of Types.reject_reason ]

@@ -175,7 +175,7 @@ let preview_move ~(wall : wall) ~broken (player : player_state) limb (hold : hol
           ~factor:Config.torso_shift_factor
       in
       if not (all_within_reach wall limbs ~torso)
-      then Error Out_of_reach
+      then Error Limb_stranded
       else if not (span_ok wall limbs)
       then Error Span_violation
       else (

@@ -103,6 +103,9 @@ type reject_reason =
   | Out_of_reach
   | Span_violation
   | Would_fall
+  | Limb_stranded
+    (* completing the move would drag the torso beyond another limb's reach
+       (§6.4) — at the Game layer this is a FALL, not a polite rejection *)
   | Insufficient_stamina
   | Needs_chalk
   | Cannot_rest (* resting needs a hand on a Rest hold, a foot attached, Stable *)

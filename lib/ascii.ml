@@ -80,7 +80,9 @@ let balance_summary (gs : game_state) ~limbs ~torso =
 
 let render_with_ui gs (ui : Ui.t) =
   let target = Ui.target ui in
-  let after = preview gs ui in
+  (* Hints are owner-disabled by default (Config): no ghost torso, no
+     post-move readout — attempting a hold is how you learn. *)
+  let after = if Config.show_move_preview then preview gs ui else None in
   let ghost_torso = Option.map after ~f:(fun ((p : player_state), _) -> p.torso) in
   let target_line =
     match target with
@@ -91,32 +93,30 @@ let render_with_ui gs (ui : Ui.t) =
         | Some h -> Sexp.to_string [%sexp (h.kind : hold_kind)]
         | None -> "?"
       in
-      sprintf
-        !"limb %{sexp:limb}  target @ hold %d (%s)  reachable %{sexp:int list}"
-        ui.limb
-        id
-        kind
-        ui.candidates
+      sprintf !"limb %{sexp:limb}  target @ hold %d (%s)" ui.limb id kind
   in
   let balance_line =
     sprintf "now:   %s" (balance_summary gs ~limbs:gs.player.limbs ~torso:gs.player.torso)
   in
-  let preview_line =
+  let preview_lines =
     match after with
-    | None -> "after: -"
+    | None -> []
     | Some ((p : player_state), (cost : Movement.cost)) ->
       let affordability =
         if cost.total > gs.player.stamina
         then sprintf "cost %d > stamina %d — YOU WILL FALL" cost.total gs.player.stamina
         else sprintf "cost %d -> stamina %d" cost.total p.stamina
       in
-      sprintf
-        "after: %s  %s"
-        (balance_summary gs ~limbs:p.limbs ~torso:p.torso)
-        affordability
+      [ sprintf
+          "after: %s  %s"
+          (balance_summary gs ~limbs:p.limbs ~torso:p.torso)
+          affordability
+      ]
   in
   String.concat
     ~sep:"\n"
     (board ?target ?ghost_torso gs
-     @ [ status_line gs; target_line; balance_line; preview_line; ui.message ])
+     @ [ status_line gs; target_line; balance_line ]
+     @ preview_lines
+     @ [ ui.message ])
 ;;
