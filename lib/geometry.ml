@@ -17,3 +17,7 @@ let max_reach = function
   | Left_hand | Right_hand -> Config.hand_reach
   | Left_foot | Right_foot -> Config.foot_reach
 ;;
+
+let shift_toward p ~target ~factor =
+  { x = p.x +. (factor *. (target.x -. p.x)); y = p.y +. (factor *. (target.y -. p.y)) }
+;;

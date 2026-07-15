@@ -14,8 +14,8 @@ let limb_glyph = function
 ;;
 
 (* Board glyphs, drawn in this order (later wins a shared cell):
-   holds, torso, limbs, then the optional highlighted target as '@'. *)
-let board ?target (gs : game_state) =
+   holds, ghost torso 't', torso 'T', limbs, then the highlighted target '@'. *)
+let board ?target ?ghost_torso (gs : game_state) =
   let wall = gs.wall in
   let cell_of f = Int.of_float (Float.round_nearest (f /. Config.ascii_cell)) in
   let cols = cell_of (Float.of_int wall.width) + 1 in
@@ -28,6 +28,7 @@ let board ?target (gs : game_state) =
   in
   Array.iter wall.holds ~f:(fun h ->
     if not (Set.mem gs.broken_holds h.id) then plot h.position (glyph_of_kind h.kind));
+  Option.iter ghost_torso ~f:(fun p -> plot p 't');
   plot gs.player.torso 'T';
   List.iter (Player.attached gs.player.limbs) ~f:(fun (limb, id) ->
     plot (Wall.position_exn wall id) (limb_glyph limb));
@@ -46,8 +47,32 @@ let status_line (gs : game_state) =
 
 let render gs = String.concat ~sep:"\n" (board gs @ [ status_line gs ])
 
+(* Post-move state for the highlighted target, via the single gate (pure). *)
+let preview (gs : game_state) (ui : Ui.t) =
+  Option.bind (Ui.target ui) ~f:(fun id ->
+    Option.bind (Wall.find gs.wall id) ~f:(fun hold ->
+      Movement.attempt_move ~wall:gs.wall ~broken:gs.broken_holds gs.player ui.limb hold
+      |> Result.ok))
+;;
+
+let balance_summary (gs : game_state) ~limbs ~torso =
+  match Balance.report gs.wall limbs ~torso with
+  | None -> "no supports"
+  | Some r ->
+    sprintf
+      !"torso (%.0f,%.0f)  support (%.0f,%.0f)  d %.1f  %{sexp:stability}"
+      torso.x
+      torso.y
+      r.support_center.x
+      r.support_center.y
+      r.balance_distance
+      r.stability
+;;
+
 let render_with_ui gs (ui : Ui.t) =
   let target = Ui.target ui in
+  let after = preview gs ui in
+  let ghost_torso = Option.map after ~f:(fun (p : player_state) -> p.torso) in
   let target_line =
     match target with
     | None -> sprintf !"limb %{sexp:limb}  target -" ui.limb
@@ -64,7 +89,17 @@ let render_with_ui gs (ui : Ui.t) =
         kind
         ui.candidates
   in
+  let balance_line =
+    sprintf "now:   %s" (balance_summary gs ~limbs:gs.player.limbs ~torso:gs.player.torso)
+  in
+  let preview_line =
+    match after with
+    | None -> "after: -"
+    | Some (p : player_state) ->
+      sprintf "after: %s" (balance_summary gs ~limbs:p.limbs ~torso:p.torso)
+  in
   String.concat
     ~sep:"\n"
-    (board ?target gs @ [ status_line gs; target_line; ui.message ])
+    (board ?target ?ghost_torso gs
+     @ [ status_line gs; target_line; balance_line; preview_line; ui.message ])
 ;;

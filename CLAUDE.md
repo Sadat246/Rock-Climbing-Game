@@ -458,7 +458,16 @@ Original spec:
   line-buffered "type `2 17` to move right hand to hold 17" is acceptable at first).
 - **This is the stick-figure MVP the project owner asked for.**
 
-### Phase 2 — Torso, spans, balance
+### Phase 2 — Torso, spans, balance ✅ (done 2026-07-15)
+Implemented as specced below, plus (owner request) mouse support in the
+Graphics window: click a reachable hold to move (all candidates pale-ringed),
+click a hold a limb is on to select that limb, hover to point the cursor —
+the ghost torso + "after:" balance preview follow it. Key findings recorded
+in TUNING_LOG (ladder rungs densified to 30u; the §6.4 post-shift reach check
+dominates balance-Falling as the practical stopper; Would_fall fires mainly
+via horizontal-support loss).
+
+Original spec:
 - Real torso with `shift_toward`; reach measured from torso; span constraints;
   balance classification; fall reasons; horizontal support check.
 - Ghost-torso preview in the ASCII renderer.

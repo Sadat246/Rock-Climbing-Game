@@ -63,6 +63,15 @@ type player_state =
   }
 [@@deriving sexp_of, compare, equal]
 
+(* Balance classification (§4.7): how far the torso has drifted from the
+   center of the supporting limbs. *)
+type stability =
+  | Stable
+  | Strained
+  | Critical
+  | Falling
+[@@deriving sexp_of, compare, equal, enumerate]
+
 type game_status =
   | Playing
   | Won

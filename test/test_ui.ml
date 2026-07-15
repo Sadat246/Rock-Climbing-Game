@@ -13,10 +13,10 @@ let%expect_test "reachable candidates per limb from the ladder start" =
       (Sexp.to_string [%sexp (limb : limb)])
       ui.candidates);
   [%expect {|
-    Left_hand  (11 12 13)
-    Right_hand (10 12 13)
-    Left_foot  (1 10 11)
-    Right_foot (0 10 11)
+    Left_hand  (3 4 5 6 7 8 9)
+    Right_hand (2 4 5 6 7 8 9)
+    Left_foot  (1 2 3)
+    Right_foot (0 2 3)
     |}]
 ;;
 
@@ -40,7 +40,7 @@ let%expect_test "game move, reject, undo" =
   (match Game.move game Left_hand ~hold_id:16 with
    | `Rejected reason -> printf !"rejected: %{sexp:reject_reason}\n" reason
    | `Moved _ -> print_endline "unexpectedly moved");
-  (match Game.move game Left_hand ~hold_id:12 with
+  (match Game.move game Left_hand ~hold_id:4 with
    | `Rejected _ -> print_endline "unexpectedly rejected"
    | `Moved game' ->
      printf "moved, turn %d\n" (Game.current_state game').player.turn;
@@ -61,12 +61,17 @@ let%expect_test "game move, reject, undo" =
     |}]
 ;;
 
+(* Same 30-move ascent as test_scenarios: hands two rung-rows ahead, feet
+   following onto the vacated jugs. *)
 let ladder_script =
-  [ Left_hand, 12; Right_hand, 13; Left_foot, 2; Right_foot, 3
-  ; Left_hand, 14; Right_hand, 15; Left_foot, 4; Right_foot, 5
-  ; Left_hand, 16; Right_hand, 17; Left_foot, 6; Right_foot, 7
-  ; Left_hand, 18; Right_hand, 19
-  ]
+  let cycle c =
+    [ Left_hand, (2 * c) + 4
+    ; Right_hand, (2 * c) + 5
+    ; Left_foot, (2 * c) + 2
+    ; Right_foot, (2 * c) + 3
+    ]
+  in
+  List.concat_map (List.range 0 7) ~f:cycle @ [ Left_hand, 18; Right_hand, 19 ]
 ;;
 
 let%expect_test "win detection: full ascent through Game ends Won" =
@@ -116,13 +121,13 @@ let%expect_test "render_with_ui: highlighted target and HUD" =
         .   .
 
 
-        @   .
-
-
         .   .
 
 
-        h   H
+        @   .
+
+
+        h t H
           T
 
         f   Q
@@ -130,7 +135,9 @@ let%expect_test "render_with_ui: highlighted target and HUD" =
 
 
     turn 0  stamina 100  chalk 5  status Playing
-    limb Left_hand  target @ hold 12 (Jug)  reachable (11 12 13)
-    Left_hand: 3 reachable holds
+    limb Left_hand  target @ hold 4 (Jug)  reachable (3 4 5 6 7 8 9)
+    now:   torso (60,45)  support (60,45)  d 0.0  Stable
+    after: torso (55,56)  support (60,52)  d 6.2  Stable
+    Left_hand: 7 reachable holds
     |}]
 ;;

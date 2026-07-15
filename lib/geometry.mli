@@ -8,3 +8,6 @@ val average : Types.point list -> Types.point
 
 (** Max distance from the torso at which [limb] may grab a hold (§4.5). *)
 val max_reach : Types.limb -> float
+
+(** Move [factor] of the way from a point toward [target] (§4.4 torso model). *)
+val shift_toward : Types.point -> target:Types.point -> factor:float -> Types.point

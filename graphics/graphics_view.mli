@@ -11,9 +11,18 @@ val init : Climb.Types.wall -> (unit, string) result
 (** Redraw the whole scene: holds as dots, climber as a stick figure. *)
 val draw : Climb.Types.game_state -> unit
 
-(** [draw] plus interactive overlays: selected limb in green, target hold
-    ringed in green, two HUD text lines at the top. *)
+(** [draw] plus interactive overlays: reachable holds pale-ringed, selected
+    limb in green, target hold bold-ringed, ghost torso (post-move preview,
+    gray), and HUD lines incl. current/preview balance tinted by stability. *)
 val draw_with_ui : Climb.Types.game_state -> Climb.Ui.t -> unit
+
+type event =
+  | Key of char
+  | Click of int option (* hold id under the pointer, if any *)
+  | Hover of int option
+
+(** Block for the next key press, mouse click, or pointer motion. *)
+val next_event : Climb.Types.wall -> event
 
 (** Block until a key is pressed in the window; return it. *)
 val read_key : unit -> char

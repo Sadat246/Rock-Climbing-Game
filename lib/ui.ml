@@ -45,5 +45,11 @@ let cycle t step =
 
 let next t = cycle t 1
 let prev t = cycle t (-1)
+
+let focus t hold_id =
+  match List.findi t.candidates ~f:(fun _ id -> id = hold_id) with
+  | Some (index, _) -> { t with index }
+  | None -> t
+;;
 let target t = List.nth t.candidates t.index
 let with_message t message = { t with message }

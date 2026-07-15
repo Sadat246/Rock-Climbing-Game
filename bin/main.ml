@@ -60,26 +60,49 @@ let confirm_move (ui : Ui.t) =
   | Some hold_id -> `Command (`Move (ui.limb, hold_id))
 ;;
 
-(* ----- Graphics frontend ----- *)
+(* ----- Graphics frontend (keyboard + mouse) ----- *)
+
+(* Clicking a hold: candidate -> move there; a hold one of our limbs is on ->
+   select that limb; any other hold -> ask the gate why it's illegal and show
+   the typed reason. Hovering a candidate points the cursor (and ghost torso
+   preview) at it. *)
+let click_command (gs : game_state) (ui : Ui.t) hold_id =
+  if List.mem ui.candidates hold_id ~equal:Int.equal
+  then `Command (`Move (ui.limb, hold_id))
+  else (
+    let limb_on_hold =
+      List.find_map (Player.attached gs.player.limbs) ~f:(fun (limb, id) ->
+        Option.some_if (id = hold_id) limb)
+    in
+    match limb_on_hold with
+    | Some limb -> `Command (`Select limb)
+    | None -> `Command (`Move (ui.limb, hold_id)))
+;;
 
 let rec graphics_loop game ui =
-  Climb_graphics.Graphics_view.draw_with_ui (Game.current_state game) ui;
-  let key = Climb_graphics.Graphics_view.read_key () in
+  let gs = Game.current_state game in
+  Climb_graphics.Graphics_view.draw_with_ui gs ui;
   let command =
-    match key with
-    | 'q' -> `Quit
-    | 'n' -> `Command (`Cycle 1)
-    | 'p' -> `Command (`Cycle (-1))
-    | 'u' -> `Command `Undo
-    | 'm' | ' ' | '\r' | '\n' -> confirm_move ui
-    | c ->
+    match (Climb_graphics.Graphics_view.next_event gs.wall : Climb_graphics.Graphics_view.event) with
+    | Key 'q' -> `Quit
+    | Key 'n' -> `Command (`Cycle 1)
+    | Key 'p' -> `Command (`Cycle (-1))
+    | Key 'u' -> `Command `Undo
+    | Key ('m' | ' ' | '\r' | '\n') -> confirm_move ui
+    | Key c ->
       (match limb_of_char c with
        | Some limb -> `Command (`Select limb)
        | None -> `None)
+    | Click (Some hold_id) -> click_command gs ui hold_id
+    | Click None -> `None
+    | Hover (Some hold_id) when List.mem ui.candidates hold_id ~equal:Int.equal ->
+      `Focus hold_id
+    | Hover _ -> `None
   in
   match command with
   | `Quit -> ()
   | `None -> graphics_loop game ui
+  | `Focus hold_id -> graphics_loop game (Ui.focus ui hold_id)
   | `Command c ->
     let game, ui = apply_command game ui c in
     graphics_loop game ui
@@ -118,24 +141,21 @@ let rec ascii_loop game ui =
 
 (* ----- Phase 0 scripted demo (kept: it exercises the reject paths) ----- *)
 
+(* Hands climb the jug rungs two rows ahead; feet follow onto the jugs the
+   hands vacate. 30-unit steps keep every move inside the torso-shift model. *)
 let demo_script =
-  [ Left_hand, 16 (* jug (40, 240): Out_of_reach demo *)
+  let cycle c =
+    [ Left_hand, (2 * c) + 4
+    ; Right_hand, (2 * c) + 5
+    ; Left_foot, (2 * c) + 2
+    ; Right_foot, (2 * c) + 3
+    ]
+  in
+  [ Left_hand, 14 (* jug (40, 240): Out_of_reach demo *)
   ; Right_foot, 18 (* finish (40, 300): Wrong_limb_for_hold demo *)
-  ; Left_hand, 12
-  ; Right_hand, 13
-  ; Left_foot, 2
-  ; Right_foot, 3
-  ; Left_hand, 14
-  ; Right_hand, 15
-  ; Left_foot, 4
-  ; Right_foot, 5
-  ; Left_hand, 16
-  ; Right_hand, 17
-  ; Left_foot, 6
-  ; Right_foot, 7
-  ; Left_hand, 18
-  ; Right_hand, 19
   ]
+  @ List.concat_map (List.range 0 7) ~f:cycle
+  @ [ Left_hand, 18; Right_hand, 19 ]
 ;;
 
 let show_demo ~ascii gs =

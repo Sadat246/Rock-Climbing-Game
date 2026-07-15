@@ -25,6 +25,41 @@ let within_reach limb ~torso ~(target : point) =
   close_enough && vertical_ok
 ;;
 
+(* §6.4 no-teleporting: after the torso shifts, every attached limb must still
+   be within its radial reach (the §4.5 vertical limits are placement-time
+   rules only, so they are not re-checked here). *)
+let all_within_reach (wall : wall) (limbs : limb_positions) ~torso =
+  List.for_all (Player.attached limbs) ~f:(fun (limb, id) ->
+    Float.( <= )
+      (Geometry.distance torso (Wall.position_exn wall id))
+      (Geometry.max_reach limb))
+;;
+
+(* Body-span constraints (§4.6), on attached pairs only. *)
+let span_ok (wall : wall) (limbs : limb_positions) =
+  let pos limb =
+    Option.map (Player.limb_hold_id limbs limb) ~f:(Wall.position_exn wall)
+  in
+  let within a b limit =
+    match pos a, pos b with
+    | Some pa, Some pb -> Float.( <= ) (Geometry.distance pa pb) limit
+    | None, _ | _, None -> true
+  in
+  (* The left limb may not end up more than max_cross_over to the RIGHT of
+     its right-side partner. *)
+  let no_cross left right =
+    match pos left, pos right with
+    | Some pl, Some pr -> Float.( <= ) (pl.x -. pr.x) Config.max_cross_over
+    | None, _ | _, None -> true
+  in
+  within Left_hand Right_hand Config.max_hand_span
+  && within Left_foot Right_foot Config.max_foot_span
+  && within Left_hand Left_foot Config.max_body_length
+  && within Right_hand Right_foot Config.max_body_length
+  && no_cross Left_hand Right_hand
+  && no_cross Left_foot Right_foot
+;;
+
 let attempt_move ~(wall : wall) ~broken (player : player_state) limb (hold : hold) =
   match Wall.find wall hold.id with
   (* Unknown ids and broken holds both read as "that hold is gone". *)
@@ -39,10 +74,22 @@ let attempt_move ~(wall : wall) ~broken (player : player_state) limb (hold : hol
     else if not (within_reach limb ~torso:player.torso ~target:hold.position)
     then Error Out_of_reach
     else (
+      (* Simulate: reattach the limb, then shift the torso toward the
+         destination (§4.4). *)
       let limbs = Player.set_limb player.limbs limb hold.id in
       let torso =
-        Geometry.average
-          (List.map (Player.attached limbs) ~f:(fun (_, id) -> Wall.position_exn wall id))
+        Geometry.shift_toward
+          player.torso
+          ~target:hold.position
+          ~factor:Config.torso_shift_factor
       in
-      Ok { player with limbs; torso; turn = player.turn + 1 })
+      if not (all_within_reach wall limbs ~torso)
+      then Error Out_of_reach
+      else if not (span_ok wall limbs)
+      then Error Span_violation
+      else (
+        match Balance.stability wall limbs ~torso with
+        | Falling -> Error Would_fall
+        | Stable | Strained | Critical ->
+          Ok { player with limbs; torso; turn = player.turn + 1 }))
 ;;

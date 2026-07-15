@@ -13,3 +13,10 @@ val test_wall_ladder : Types.wall
 
 (** Valid four-limb starting pose at the bottom of [test_wall_ladder]. *)
 val ladder_start : Types.player_state
+
+(** §6.2 balance scenario (foot desert): footholds only at the bottom, jugs
+    climbing away above. Climbing hands-high then reaching back down leaves
+    the pose Critical; the next upward move is rejected. No finish holds. *)
+val test_wall_overhang : Types.wall
+
+val overhang_start : Types.player_state

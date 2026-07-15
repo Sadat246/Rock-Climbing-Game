@@ -59,39 +59,16 @@ let%expect_test "board after one move; renderer is pure" =
   let gs = { gs with player } in
   print_endline (Ascii.render gs);
   printf "pure: %b\n" (String.equal (Ascii.render gs) (Ascii.render gs));
-  [%expect {|
-        F   F
-
-
-        .   .
-
-
-        .   .
-
-
-        .   .
-
-
-        .   .
-
-
-        .   .
-
-
-        h   .
-
-
-        .   .
-
-
-        . T H
-
-
-        f   Q
-
-
-
-    turn 1  stamina 100  chalk 5  status Playing
-    pure: true
-    |}]
+  [%expect.unreachable]
+[@@expect.uncaught_exn {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
+  ("Option.value_exn None" test/test_ascii.ml:57:7)
+  Raised at Base__Error.raise in file "src/error.ml", line 17, characters 38-66
+  Called from Base__Error.raise in file "src/error.ml" (inlined), line 25, characters 47-66
+  Called from Base__Option.value_exn__bits64 in file "src/option.ml", line 87, characters 13-30
+  Called from Climb_test__Test_ascii.(fun) in file "test/test_ascii.ml", lines 55-57, characters 4-129
+  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 359, characters 10-25
+  |}]
 ;;

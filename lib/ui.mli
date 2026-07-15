@@ -22,6 +22,9 @@ val init : Types.game_state -> t
 val next : t -> t
 val prev : t -> t
 
+(** Point the cursor at a specific candidate hold id (no-op if it isn't one). *)
+val focus : t -> int -> t
+
 (** Highlighted destination hold, if any candidate exists. *)
 val target : t -> int option
 

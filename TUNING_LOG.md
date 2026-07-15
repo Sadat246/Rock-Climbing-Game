@@ -18,6 +18,32 @@ ladder — feet land exactly 15 units above the torso mid-script. Fine for a
 canary, but when the real torso model (Phase 2) lands, re-check that ladder
 foot moves stay comfortably legal.
 
+## 2026-07-15 — Phase 2 torso/spans/balance: ladder densified, gate findings
+Hypothesis: the Phase 0/1 ladder (60-unit rungs) would survive the real torso
+  model (`torso_shift_factor 0.25`, reach from torso, §4.5 vertical limits).
+Change: NO constants changed — all §8 values kept. The hand simulation showed
+  60-unit rungs strand the feet: the torso trails each move, so a foot
+  stepping +60 exceeds `max_foot_above_torso` (15) long before the torso
+  catches up. Fixed as CONTENT, not tuning: ladder jugs now every 30 units
+  (feet climb the jugs the hands vacate); canary script is 30 moves, all
+  Stable, torso +30/cycle steady state.
+Design findings (§6.5.5, formula-level observations):
+  1. The §6.4 no-teleport post-shift reach check is the practical stopper for
+     over-ambitious routes — it fires before balance reaches Falling in every
+     natural sequence tried (a limb gets stranded > its reach first).
+  2. Balance-Falling via distance is nearly unreachable from equilibrium
+     poses (single move changes d by ≤ ~|torso−limb|/4 ≈ 27). `Would_fall`
+     in practice means the horizontal-support check (torso outside
+     [support min−15, max+15]) — unit-tested that way.
+  3. Critical poses ARE reachable and feel right: climb hands-high off a
+     foot desert, then reach back down (overhang_lean scenario hits d=41.1
+     Critical on turn 6, next upward move rejected).
+  Phase 3 stamina will make Strained/Critical *cost* rather than block; the
+  balance multipliers get their teeth there.
+Result: ladder canary 30 moves Won, 0 rejections; overhang_lean Critical + 
+  terminal Out_of_reach; all §4.6 span constraints exercised in tests.
+Verdict: keep all constants. Bands: none defined yet (solver is Phase 4).
+
 ## 2026-07-15 — Phase 1 interactive play (no tuning performed)
 Hypothesis: n/a — no constants changed.
 Change: none in config.ml. Reachability shown to the player is computed by
