@@ -52,3 +52,13 @@ val attempt_rest
   -> broken:Set.M(Int).t
   -> Types.player_state
   -> (Types.player_state, Types.reject_reason) result
+
+(** Chalking (§4.10): bag -1, the given hand chalked for
+    [Config.chalk_duration] turns. Costs a turn, no stamina. Rejected for
+    feet ([Wrong_limb_for_hold]) and empty bags ([No_chalk_left]). *)
+val attempt_chalk
+  :  wall:Types.wall
+  -> broken:Set.M(Int).t
+  -> Types.player_state
+  -> Types.limb
+  -> (Types.player_state, Types.reject_reason) result

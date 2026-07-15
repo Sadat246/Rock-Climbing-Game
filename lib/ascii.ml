@@ -45,10 +45,12 @@ let board ?target ?ghost_torso (gs : game_state) =
 
 let status_line (gs : game_state) =
   sprintf
-    !"turn %d  stamina %d  chalk %d  status %{sexp:game_status}"
+    !"turn %d  stamina %d  chalk %d L%d R%d  status %{sexp:game_status}"
     gs.player.turn
     gs.player.stamina
     gs.player.chalk.remaining
+    gs.player.chalk.left_hand_chalk
+    gs.player.chalk.right_hand_chalk
     gs.status
 ;;
 

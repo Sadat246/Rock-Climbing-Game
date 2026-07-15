@@ -90,6 +90,8 @@ type game_state =
   { player : player_state
   ; wall : wall
   ; broken_holds : Set.M(Int).t
+  ; hold_wear : int Map.M(Int).t
+    (* turns each crumbling hold has been occupied; breaks at durability *)
   ; status : game_status
   }
 [@@deriving sexp_of]
@@ -109,4 +111,5 @@ type reject_reason =
   | Insufficient_stamina
   | Needs_chalk
   | Cannot_rest (* resting needs a hand on a Rest hold, a foot attached, Stable *)
+  | No_chalk_left (* chalking with an empty bag *)
 [@@deriving sexp_of, compare, equal]

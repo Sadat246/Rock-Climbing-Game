@@ -113,9 +113,77 @@ let overhang_start =
     }
 ;;
 
+(* §6.2 sloper_gate: the only way up crosses a row of two slopers at y=150 —
+   the jug rows below (y<=90) are too far from the jugs above (y=210) to
+   skip the gate (>110 from any legal torso). Unchalked slopers (grip 8/turn
+   /hand) drain the tank mid-gate; chalked (3) they're crossable — but
+   chalk_duration 3 means the crossing has to be sequenced tightly. A
+   Chalk_refill pocket sits just below the gate. *)
+let test_wall_sloper_gate =
+  let footholds = [ mk 0 40. 30. Foothold; mk 1 80. 30. Foothold ] in
+  let rungs =
+    [ mk 2 40. 60. Jug
+    ; mk 3 80. 60. Jug
+    ; mk 4 40. 90. Jug
+    ; mk 5 80. 90. Jug
+    ; mk 6 40. 150. Sloper
+    ; mk 7 80. 150. Sloper
+    ; mk 8 40. 220. Jug (* high enough that no torso below the sloper row reaches *)
+    ; mk 9 80. 220. Jug
+    ; mk 10 40. 250. Finish
+    ; mk 11 80. 250. Finish
+    ; mk 12 60. 110. Chalk_refill
+    ]
+  in
+  { holds = Array.of_list (footholds @ rungs)
+  ; width = 120
+  ; height = 270
+  ; finish_y = 250.
+  }
+;;
+
+let sloper_gate_start =
+  start_pose
+    test_wall_sloper_gate
+    { left_hand = Some 2
+    ; right_hand = Some 3
+    ; left_foot = Some 0
+    ; right_foot = Some 1
+    }
+;;
+
+(* §6.2 crumble_trap: a tempting crumbling jug (durability 2) on the left.
+   Scenario wall — no finish holds. *)
+let test_wall_crumble_trap =
+  { holds =
+      [| mk 0 40. 30. Foothold
+       ; mk 1 80. 30. Foothold
+       ; mk 2 40. 60. Jug
+       ; mk 3 80. 60. Jug
+       ; { id = 4; position = { x = 40.; y = 90. }; kind = Crumbling; durability = Some 2 }
+       ; mk 5 80. 90. Jug
+      |]
+  ; width = 120
+  ; height = 120
+  ; finish_y = 120.
+  }
+;;
+
+let crumble_trap_start =
+  start_pose
+    test_wall_crumble_trap
+    { left_hand = Some 2
+    ; right_hand = Some 3
+    ; left_foot = Some 0
+    ; right_foot = Some 1
+    }
+;;
+
 let all =
   [ "ladder", (test_wall_ladder, ladder_start)
   ; "overhang", (test_wall_overhang, overhang_start)
+  ; "sloper_gate", (test_wall_sloper_gate, sloper_gate_start)
+  ; "crumble_trap", (test_wall_crumble_trap, crumble_trap_start)
   ]
 ;;
 

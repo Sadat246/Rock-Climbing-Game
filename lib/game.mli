@@ -36,8 +36,18 @@ val move
   -> hold_id:int
   -> [ `Moved of t * Movement.cost | `Fell of t * string | `Rejected of Types.reject_reason ]
 
-(** Rest (§4.3): hand on a Rest hold + a foot attached + Stable. *)
-val rest : t -> [ `Rested of t | `Rejected of Types.reject_reason ]
+(** Rest (§4.3): hand on a Rest hold + a foot attached + Stable. Can end in
+    a fall if the hold being rested on crumbles away. *)
+val rest
+  :  t
+  -> [ `Rested of t | `Fell of t * string | `Rejected of Types.reject_reason ]
+
+(** Chalk a hand (§4.10): bag -1, hand chalked for chalk_duration turns,
+    costs a turn. *)
+val chalk
+  :  t
+  -> Types.limb
+  -> [ `Chalked of t | `Fell of t * string | `Rejected of Types.reject_reason ]
 
 (** Step back one accepted move (works from a Fallen state too). *)
 val undo : t -> t option

@@ -11,7 +11,7 @@ let%expect_test "overhang: no finish holds, search space exhausts cleanly" =
    | No_route { states_expanded } -> printf "no route, %d states expanded\n" states_expanded
    | Solution _ -> print_endline "unexpectedly solved"
    | Search_limit _ -> print_endline "unexpectedly hit the cap");
-  [%expect {| no route, 4950 states expanded |}]
+  [%expect {| no route, 7630 states expanded |}]
 ;;
 
 let%expect_test "determinism: same wall, same outcome, same route" =
@@ -35,12 +35,12 @@ let%expect_test "low stamina: the solver rest-manages its way up" =
   (match Solver.solve ~wall:Wall.test_wall_ladder ~start with
    | No_route { states_expanded } -> printf "no route, %d states expanded\n" states_expanded
    | Solution { actions; metrics } ->
-     let rests = List.count actions ~f:(function Solver.Rest -> true | Move _ -> false) in
+     let rests = List.count actions ~f:(function Solver.Rest -> true | Move _ | Chalk _ -> false) in
      printf !"solved with %d rests: %{sexp:Solver.metrics}\n" rests metrics
    | Search_limit _ -> print_endline "unexpectedly hit the cap");
   [%expect {|
-    solved with 5 rests: ((optimal_cost 101) (optimal_moves 17) (chalk_required 0)
-     (min_stamina_remaining 3) (states_expanded 77953) (max_queue_size 22828)
+    solved with 5 rests: ((optimal_cost 99) (optimal_moves 18) (chalk_required 0)
+     (min_stamina_remaining 8) (states_expanded 254066) (max_queue_size 84437)
      (critical_balance_turns 0))
     |}]
 ;;

@@ -13,12 +13,14 @@ open! Core
 type action =
   | Move of Types.limb * int (* hold id *)
   | Rest
+  | Chalk of Types.limb
 [@@deriving sexp_of, compare, equal]
 
 (* §4.14 difficulty metrics. [misleading_branches] and [route_families]
    arrive with the generator (Phase 6). [min_stamina_remaining] is the
    lowest the tank gets at ANY point on the optimal route.
-   [chalk_required] stays 0 until chalk actions exist (Phase 5). *)
+   [chalk_required] counts the chalk ACTIONS on the route (refill holds can
+   mask net bag drawdown). *)
 type metrics =
   { optimal_cost : int
   ; optimal_moves : int

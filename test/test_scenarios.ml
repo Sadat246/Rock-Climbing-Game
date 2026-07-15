@@ -193,3 +193,56 @@ let%expect_test "overhang_lean: critical pose, then the wall says no" =
     rejected: Left_hand -> 9 (Limb_stranded)
     |}]
 ;;
+
+(* §6.2 sloper_gate, the unchalked attempt: the only way up crosses two
+   slopers; without chalk their grip drains the tank and the gate rejects
+   the crossing (Insufficient_stamina) before the top. The chalked crossing
+   is proven by the solver in test_tuning.ml (chalk_required = 2). *)
+let%expect_test "sloper_gate unchalked: the wall wins" =
+  let wall = Wall.test_wall_sloper_gate in
+  let script =
+    [ `M (Left_hand, 4)
+    ; `M (Right_hand, 5)
+    ; `M (Left_foot, 2)
+    ; `M (Right_foot, 3)
+    ; `M (Left_hand, 6) (* sloper, unchalked: grip 8/turn from here on *)
+    ; `M (Right_hand, 7) (* both hands on slopers *)
+    ; `M (Left_foot, 4)
+    ; `M (Right_foot, 5)
+    ; `M (Left_hand, 8) (* the exit reach *)
+    ; `M (Right_hand, 9)
+    ; `M (Left_hand, 10)
+    ; `M (Right_hand, 11)
+    ]
+  in
+  let final, rejects =
+    replay ~wall ~start:Wall.sloper_gate_start ~script ~on_accept:(fun next limb hold_id ->
+      printf
+        "turn %2d  %-10s -> %2d   stamina %3d\n"
+        next.turn
+        (Sexp.to_string [%sexp (limb : limb)])
+        hold_id
+        next.stamina)
+  in
+  List.iter (List.rev rejects) ~f:(fun (action, reason) ->
+    match action with
+    | `Rest -> printf !"rejected: rest (%{sexp:reject_reason})\n" reason
+    | `Move (limb, hold_id) ->
+      printf !"rejected: %{sexp:limb} -> %d (%{sexp:reject_reason})\n" limb hold_id reason);
+  printf "made it to the top: %b\n" (Game.won ~wall final);
+  [%expect {|
+    turn  1  Left_hand  ->  4   stamina  94
+    turn  2  Right_hand ->  5   stamina  88
+    turn  3  Left_foot  ->  2   stamina  83
+    turn  4  Right_foot ->  3   stamina  78
+    turn  5  Left_hand  ->  6   stamina  65
+    turn  6  Right_hand ->  7   stamina  45
+    turn  7  Left_foot  ->  4   stamina  26
+    rejected: Right_foot -> 5 (Insufficient_stamina)
+    rejected: Left_hand -> 8 (Out_of_reach)
+    rejected: Right_hand -> 9 (Out_of_reach)
+    rejected: Left_hand -> 10 (Out_of_reach)
+    rejected: Right_hand -> 11 (Out_of_reach)
+    made it to the top: false
+    |}]
+;;

@@ -21,6 +21,17 @@ val test_wall_overhang : Types.wall
 
 val overhang_start : Types.player_state
 
+(** §6.2 sloper_gate: the only route up crosses two slopers — unchalked they
+    drain the tank, chalked they're crossable. Chalk_refill pocket below. *)
+val test_wall_sloper_gate : Types.wall
+
+val sloper_gate_start : Types.player_state
+
+(** §6.2 crumble_trap: a crumbling jug (durability 2). Scenario wall. *)
+val test_wall_crumble_trap : Types.wall
+
+val crumble_trap_start : Types.player_state
+
 (** Registry of hand-built walls with their starting poses, for the CLI and
     the tuning loop. *)
 val all : (string * (Types.wall * Types.player_state)) list

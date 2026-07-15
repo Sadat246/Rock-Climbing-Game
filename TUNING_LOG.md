@@ -18,6 +18,36 @@ ladder — feet land exactly 15 units above the torso mid-script. Fine for a
 canary, but when the real torso model (Phase 2) lands, re-check that ladder
 foot moves stay comfortably legal.
 
+## 2026-07-15 — Phase 5 chalk/crumbling: solver dominance rework, sloper_gate content
+Hypothesis: chalk edges would slot into the Phase 4 solver unchanged.
+Reality (all changes are solver internals; NO gameplay constants touched):
+  1. Chalk edges exploded the chalk-less ladder 43.7k -> 412k states
+     (useless chalking multiplies the key space). Fix: skip chalk edges on
+     walls with no crimps/slopers — provably optimality-preserving there.
+  2. Phase 4's limbs-level dominance was quietly OVER-pruning: on
+     sloper_gate it claimed a cost-130 route when a 96 existed, and after a
+     wall tweak it claimed "no route" for a solvable wall. Fix: dominance
+     only compares states in the same torso REGION (3x the key bucket),
+     Pareto over (stamina, bag, lh chalk, rh chalk; g). Ladder: cost 93
+     (exact 91), 137k states ~15s. Slower than Phase 4's 4.5s but honest.
+     Lesson recorded: aggressive dominance must respect every axis that
+     affects reachability, and the canary alone was NOT enough to catch it —
+     only the second wall exposed it. More walls = better solver coverage.
+  3. sloper_gate content needed 3 iterations: refill pocket at (60,110)
+     doubled as a launchpad letting one hand skip the gate (fixed by raising
+     the top jugs); 230-high jugs made the wall genuinely impossible
+     (solver exhausted 527k states); 220 landed it: cost 132, 13 moves,
+     chalk_required 2, min_stamina 1, replay Won. Unchalked scripted attempt
+     dies mid-gate (94 -> 26 in three sloper turns, then all rejects). Bands:
+     chalk_required >= 2, min_stamina <= 30.
+  4. compute_status now enforces §4.7 fall conditions (<2 limbs, Falling)
+     because hold breakage creates poses the gate never approved — found by
+     the crumble_trap scenario test, invisible to every earlier test.
+  5. Emergent mechanic (kept, deliberately): re-gripping the hold a limb is
+     already on costs a move but shifts the torso toward it — weight-shift.
+     The solver uses it to climb out of the sloper gate.
+Verdict: keep. New bands in test_tuning.ml for sloper_gate.
+
 ## 2026-07-15 — Phase 4 solver: search design, bucket changes, first metrics
 Hypothesis: §4.12 Dijkstra with torso/stamina bucketing (5/5) would handle
   the 20-hold ladder.

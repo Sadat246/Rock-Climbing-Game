@@ -86,6 +86,7 @@ let run_action game action =
   | `R ->
     (match Game.rest game with
      | `Rested game -> game
+     | `Fell (_, reason) -> raise_s [%message "rest fell" (reason : string)]
      | `Rejected reason -> raise_s [%message "rest rejected" (reason : reject_reason)])
   | `M (limb, hold_id) ->
     (match Game.move game limb ~hold_id with
@@ -156,7 +157,7 @@ let%expect_test "render_with_ui: highlighted target and HUD" =
 
 
 
-    turn 0  stamina 100  chalk 5  status Playing
+    turn 0  stamina 100  chalk 5 L0 R0  status Playing
     limb Left_hand  target @ hold 1 (Foothold)
     now:   torso (60,45)  support (60,45)  d 0.0  Stable
     Left_hand selected

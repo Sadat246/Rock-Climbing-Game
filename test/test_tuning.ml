@@ -15,7 +15,13 @@ let replay_through_game ~wall ~start (actions : Solver.action list) =
       | Solver.Rest ->
         (match Game.rest game with
          | `Rested game -> game
+         | `Fell (_, reason) -> raise_s [%message "replay rest fell" (reason : string)]
          | `Rejected r -> raise_s [%message "replay rest rejected" (r : reject_reason)])
+      | Solver.Chalk limb ->
+        (match Game.chalk game limb with
+         | `Chalked game -> game
+         | `Fell (_, reason) -> raise_s [%message "replay chalk fell" (reason : string)]
+         | `Rejected r -> raise_s [%message "replay chalk rejected" (r : reject_reason)])
       | Solver.Move (limb, hold_id) ->
         (match Game.move game limb ~hold_id with
          | `Moved (game, _) -> game
@@ -46,8 +52,36 @@ let%expect_test "ladder canary via the solver: solves, replays to Won, in-band" 
      check "state space in check (§6.3 leak canary)" (metrics.states_expanded < 200_000));
   [%expect {|
     replay status: Won
-    ((optimal_cost 95) (optimal_moves 13) (chalk_required 0)
-     (min_stamina_remaining 18) (states_expanded 43674) (max_queue_size 13308)
+    ((optimal_cost 93) (optimal_moves 13) (chalk_required 0)
+     (min_stamina_remaining 20) (states_expanded 137525) (max_queue_size 65130)
+     (critical_balance_turns 0))
+    |}]
+;;
+
+let%expect_test "sloper_gate: solver finds the chalk-dependent route, in-band" =
+  (match Solver.solve ~wall:Wall.test_wall_sloper_gate ~start:Wall.sloper_gate_start with
+   | No_route _ | Search_limit _ -> print_endline "SLOPER GATE DID NOT SOLVE"
+   | Solution { actions; metrics } ->
+     let status =
+       replay_through_game
+         ~wall:Wall.test_wall_sloper_gate
+         ~start:Wall.sloper_gate_start
+         actions
+     in
+     printf !"replay status: %{sexp:game_status}\n" status;
+     Expect_test_helpers_core.require ([%equal: game_status] status Won);
+     printf !"%{sexp:Solver.metrics}\n" metrics;
+     let check name ok =
+       Expect_test_helpers_core.require ok ~if_false_then_print_s:(lazy (Sexp.Atom name))
+     in
+     (* §6.3 target bands for the gate wall *)
+     check "chalk is forced (>= 2 chalk actions)" (metrics.chalk_required >= 2);
+     check "low stamina margin (hard wall)" (metrics.min_stamina_remaining <= 30)
+   );
+  [%expect {|
+    replay status: Won
+    ((optimal_cost 132) (optimal_moves 13) (chalk_required 2)
+     (min_stamina_remaining 1) (states_expanded 110533) (max_queue_size 32546)
      (critical_balance_turns 0))
     |}]
 ;;

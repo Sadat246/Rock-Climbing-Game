@@ -42,21 +42,54 @@ let apply_command (game : Game.t) (ui : Ui.t) command =
        | None -> game, Ui.with_message ui "nothing to undo"
        | Some game -> game, Ui.with_message (Ui.select_limb game.current ui.limb) "undone")
   | `Rest ->
-    no_fall
-      (match game.current.status with
-       | Won | Fallen _ -> game, Ui.with_message ui "the climb is over - u undoes"
-       | Playing ->
-         (match Game.rest game with
-          | `Rested game' ->
-            let message =
-              sprintf "rested: stamina %d" (Game.current_state game').player.stamina
-            in
-            game', Ui.with_message (Ui.select_limb game'.current ui.limb) message
-          | `Rejected _ ->
+    (match game.current.status with
+     | Won | Fallen _ -> no_fall (game, Ui.with_message ui "the climb is over - u undoes")
+     | Playing ->
+       (match Game.rest game with
+        | `Rested game' ->
+          let message =
+            sprintf "rested: stamina %d" (Game.current_state game').player.stamina
+          in
+          no_fall (game', Ui.with_message (Ui.select_limb game'.current ui.limb) message)
+        | `Fell (game', reason) ->
+          ( game'
+          , Ui.with_message
+              (Ui.select_limb game'.current ui.limb)
+              (sprintf "YOU FELL: %s. Back to the start." reason)
+          , List.hd game'.history )
+        | `Rejected _ ->
+          no_fall
             ( game
             , Ui.with_message
                 ui
                 "can't rest: need a hand on a Rest hold, a foot on, and Stable" )))
+  | `Chalk limb ->
+    (match game.current.status with
+     | Won | Fallen _ -> no_fall (game, Ui.with_message ui "the climb is over - u undoes")
+     | Playing ->
+       (match Game.chalk game limb with
+        | `Chalked game' ->
+          let c = (Game.current_state game').player.chalk in
+          no_fall
+            ( game'
+            , Ui.with_message
+                (Ui.select_limb game'.current ui.limb)
+                (sprintf
+                   !"chalked %{sexp:limb} (bag %d, L%d R%d)"
+                   limb
+                   c.remaining
+                   c.left_hand_chalk
+                   c.right_hand_chalk) )
+        | `Fell (game', reason) ->
+          ( game'
+          , Ui.with_message
+              (Ui.select_limb game'.current ui.limb)
+              (sprintf "YOU FELL: %s. Back to the start." reason)
+          , List.hd game'.history )
+        | `Rejected No_chalk_left ->
+          no_fall (game, Ui.with_message ui "the chalk bag is empty")
+        | `Rejected _ ->
+          no_fall (game, Ui.with_message ui "you can only chalk a hand")))
   | `Move (limb, hold_id) ->
     (match game.current.status with
      | Won ->
@@ -122,6 +155,7 @@ let rec graphics_loop game ui =
     | Key 'p' -> `Command (`Cycle (-1))
     | Key 'u' -> `Command `Undo
     | Key 'r' -> `Command `Rest
+    | Key 'c' -> `Command (`Chalk ui.limb)
     | Key ('m' | ' ' | '\r' | '\n') -> confirm_move ui
     | Key c ->
       (match limb_of_char c with
@@ -160,6 +194,7 @@ let rec ascii_loop game ui =
       | [ "p" ] -> `Command (`Cycle (-1))
       | [ "u" ] -> `Command `Undo
       | [ "r" ] -> `Command `Rest
+      | [ "c" ] -> `Command (`Chalk ui.limb)
       | [ "m" ] -> confirm_move ui
       | [ c ] when String.length c = 1 && Option.is_some (limb_of_char c.[0]) ->
         `Command (`Select (Option.value_exn (limb_of_char c.[0])))
@@ -175,7 +210,7 @@ let rec ascii_loop game ui =
      | `None ->
        ascii_loop
          game
-         (Ui.with_message ui "commands: 1-4 n p m r u q, or '<limb#> <hold_id>'")
+         (Ui.with_message ui "commands: 1-4 n p m c r u q, or '<limb#> <hold_id>'")
      | `Command c ->
        (* no animation in the terminal: the message carries the fall *)
        let game, ui, (_ : game_state option) = apply_command game ui c in
@@ -223,6 +258,9 @@ let run_demo ~ascii ~no_wait game =
       match action with
       | `R ->
         (match Game.rest game with
+         | `Fell (game, reason) ->
+           printf "FELL while resting: %s\n" reason;
+           game
          | `Rejected reason ->
            printf
              !"turn %d: rest REJECTED (%{sexp:reject_reason})\n"
@@ -289,8 +327,16 @@ let print_route ~wall ~start actions =
           ( "rest"
           , (match Game.rest game with
              | `Rested g -> g
+             | `Fell (_, reason) -> raise_s [%message "solver route fell" (reason : string)]
              | `Rejected r ->
                raise_s [%message "solver route rest rejected" (r : reject_reason)]) )
+        | Chalk limb ->
+          ( sprintf !"chalk %{sexp:limb}" limb
+          , (match Game.chalk game limb with
+             | `Chalked g -> g
+             | `Fell (_, reason) -> raise_s [%message "solver route fell" (reason : string)]
+             | `Rejected r ->
+               raise_s [%message "solver route chalk rejected" (r : reject_reason)]) )
         | Move (limb, hold_id) ->
           ( sprintf !"%-10s -> %2d" (Sexp.to_string [%sexp (limb : limb)]) hold_id
           , (match Game.move game limb ~hold_id with
@@ -326,7 +372,13 @@ let watch_route ~wall ~start actions =
       | Rest ->
         (match Game.rest game with
          | `Rested g -> g
+         | `Fell (_, reason) -> raise_s [%message "solver route fell" (reason : string)]
          | `Rejected r -> raise_s [%message "solver route rest rejected" (r : reject_reason)])
+      | Chalk limb ->
+        (match Game.chalk game limb with
+         | `Chalked g -> g
+         | `Fell (_, reason) -> raise_s [%message "solver route fell" (reason : string)]
+         | `Rejected r -> raise_s [%message "solver route chalk rejected" (r : reject_reason)])
       | Move (limb, hold_id) ->
         (match Game.move game limb ~hold_id with
          | `Moved (g, _) -> g

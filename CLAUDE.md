@@ -530,7 +530,31 @@ Original spec:
   solver and game agree.
 - From here on, the solver is your tuning instrument (§6.3).
 
-### Phase 5 — Chalk + special holds
+### Phase 5 — Chalk + special holds ✅ (done 2026-07-15)
+Implemented as specced below. Decisions & findings (details in TUNING_LOG):
+- Chalk: `c` chalks the selected hand; grip uses THIS turn's (pre-decay)
+  chalk; rest/chalk/move all decay both hands by 1. Chalk_refill: every
+  hand-grab tops the bag up, capped at `starting_chalk` (farming is bounded
+  by the cap and costs turns/stamina).
+- `chalk_required` metric counts chalk ACTIONS (refills mask net drawdown).
+- Crumbling: per-hold wear lives in `game_state.hold_wear`; wear ticks every
+  occupied turn (a world event in game.ml, not the gate); at durability the
+  hold breaks and limbs on it detach. The SOLVER treats crumbling holds as
+  already broken (pessimistic — wear in the search key would explode it):
+  crumbling holds are decoy material by design.
+- Bug found by the crumble scenario test: breakage can invalidate poses the
+  gate never approved, so compute_status now enforces the §4.7 fall
+  conditions (<2 limbs, Falling stability) directly.
+- Solver: chalk edges only on walls with crimps/slopers (provably
+  optimality-preserving skip); dominance refined to (limbs + torso REGION)
+  Pareto over (stamina, bag, per-hand chalk; g) — limbs-only dominance
+  over-pruned sloper_gate to "no route".
+- New walls: `sloper_gate` (both hands forced through a sloper row; solver
+  discovers a 2-chalk route, min_stamina 1; unchalked scripted attempt
+  drains out mid-gate) and `crumble_trap`. Emergent mechanic kept: re-gripping
+  your own hold shifts the torso — a deliberate weight-shift move.
+
+Original spec:
 - Chalk bag, per-hand duration, refill holds, crumbling holds with durability,
   finish conditions. Extend solver state accordingly (it was designed for this).
 - Tests: chalk math; crumbling-hold breakage mid-climb; solver finds chalk-dependent

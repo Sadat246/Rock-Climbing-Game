@@ -217,7 +217,7 @@ let%expect_test "rest: rejected off Rest holds, works on them, caps at start" =
   let game = ladder_game () in
   (match Game.rest game with
    | `Rejected reason -> printf !"at start: %{sexp:reject_reason}\n" reason
-   | `Rested _ -> print_endline "unexpectedly rested");
+   | `Rested _ | `Fell _ -> print_endline "unexpectedly rested");
   (* climb two cycles so the hands sit on the y=120 Rest row (ids 6,7) *)
   let script =
     [ Left_hand, 4; Right_hand, 5; Left_foot, 2; Right_foot, 3
@@ -239,6 +239,7 @@ let%expect_test "rest: rejected off Rest holds, works on them, caps at start" =
       | `Rested game ->
         printf "rested: stamina %d\n" (Game.current_state game).player.stamina;
         rest_until_capped game (n - 1)
+      | `Fell _ -> failwith "unexpected fall while resting"
       | `Rejected r ->
         printf !"rejected: %{sexp:reject_reason}\n" r;
         game)
@@ -251,5 +252,88 @@ let%expect_test "rest: rejected off Rest holds, works on them, caps at start" =
     rested: stamina 86
     rested: stamina 100
     rested: stamina 100
+    |}]
+;;
+
+let%expect_test "crumbling hold: wears while occupied, breaks, limb detaches" =
+  let game = Game.create ~wall:Wall.test_wall_crumble_trap ~start:Wall.crumble_trap_start in
+  (* grab the crumbling jug (durability 2), then linger: each turn it is
+     occupied wears it by one *)
+  let move g limb hold_id =
+    match Game.move g limb ~hold_id with
+    | `Moved (g, _) -> g
+    | `Fell (_, r) -> raise_s [%message "fell" (r : string)]
+    | `Rejected r -> raise_s [%message "rejected" (r : reject_reason)]
+  in
+  let g = move game Left_hand 4 in
+  let gs = Game.current_state g in
+  printf
+    !"after grab:   wear %{sexp:int Map.M(Int).t}  broken %{sexp:Set.M(Int).t}\n"
+    gs.hold_wear
+    gs.broken_holds;
+  let g = move g Right_hand 5 in
+  let gs = Game.current_state g in
+  printf
+    !"after linger: wear %{sexp:int Map.M(Int).t}  broken %{sexp:Set.M(Int).t}  LH %{sexp:int option}  status %{sexp:game_status}\n"
+    gs.hold_wear
+    gs.broken_holds
+    gs.player.limbs.left_hand
+    gs.status;
+  (* the crumbled hold is gone for good: grabbing it again is Hold_broken *)
+  (match Game.move g Left_hand ~hold_id:4 with
+   | `Rejected r -> printf !"regrab: %{sexp:reject_reason}\n" r
+   | `Moved _ | `Fell _ -> print_endline "regrabbed a broken hold?!");
+  (* the detached hand can re-place on a live hold *)
+  let g = move g Left_hand 2 in
+  printf !"re-placed LH: %{sexp:int option}\n" (Game.current_state g).player.limbs.left_hand;
+  [%expect {|
+    after grab:   wear ((4 1))  broken ()
+    after linger: wear ()  broken (4)  LH ()  status Playing
+    regrab: Hold_broken
+    re-placed LH: (2)
+    |}]
+;;
+
+let%expect_test "crumbling under a critical pose is a fall (to the start)" =
+  (* Custom wall: the crumbling hold is the ONLY thing keeping the torso
+     inside the horizontal support margin — when it breaks, the pose fails
+     and the climber falls. *)
+  let mk id x y kind = { id; position = { x; y }; kind; durability = None } in
+  let wall =
+    { holds =
+        [| mk 0 90. 30. Foothold
+         ; mk 1 110. 30. Foothold
+         ; { id = 2; position = { x = 30.; y = 80. }; kind = Crumbling; durability = Some 1 }
+         ; mk 3 110. 80. Jug
+         ; mk 4 100. 60. Jug
+        |]
+    ; width = 140
+    ; height = 120
+    ; finish_y = 120.
+    }
+  in
+  let limbs =
+    { left_hand = Some 2; right_hand = Some 3; left_foot = Some 0; right_foot = Some 1 }
+  in
+  let start =
+    { Wall.crumble_trap_start with
+      limbs
+    ; torso = { x = 45.; y = 60. } (* hanging left, off the crumbling hold *)
+    }
+  in
+  let game = Game.create ~wall ~start in
+  (* any action passes a turn; the crumbling hold (durability 1) breaks and
+     the torso is left outside [min support x - margin] *)
+  (match Game.move game Right_hand ~hold_id:4 with
+   | `Fell (g, reason) ->
+     printf "%s\n" reason;
+     printf
+       "back at start %b\n"
+       ([%equal: player_state] (Game.current_state g).player start)
+   | `Moved _ -> print_endline "unexpectedly survived"
+   | `Rejected r -> printf !"rejected: %{sexp:reject_reason}\n" r);
+  [%expect {|
+    hold 2 crumbled under you
+    back at start true
     |}]
 ;;

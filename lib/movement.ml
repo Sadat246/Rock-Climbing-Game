@@ -151,6 +151,14 @@ let upkeep_cost (limbs : limb_positions) ~stability =
   base + feet_off
 ;;
 
+(* §4.10: per-hand chalk decays by one every turn (floor 0). *)
+let decay_chalk (c : chalk_state) =
+  { c with
+    left_hand_chalk = Int.max 0 (c.left_hand_chalk - 1)
+  ; right_hand_chalk = Int.max 0 (c.right_hand_chalk - 1)
+  }
+;;
+
 let preview_move ~(wall : wall) ~broken (player : player_state) limb (hold : hold) =
   match Wall.find wall hold.id with
   (* Unknown ids and broken holds both read as "that hold is gone". *)
@@ -190,12 +198,45 @@ let preview_move ~(wall : wall) ~broken (player : player_state) limb (hold : hol
                else 0)
           in
           let upkeep = upkeep_cost limbs ~stability in
+          (* grip uses THIS turn's chalk (pre-decay): the chalk on your hand
+             when you grab is what you grab with *)
           let grip = grip_cost wall limbs player.chalk ~stability in
           let total = movement + penalties + upkeep + grip in
           let stamina = Int.max 0 (player.stamina - total) in
+          let chalk = decay_chalk player.chalk in
+          (* grabbing a Chalk_refill hold with a hand tops the bag back up *)
+          let chalk =
+            match hold.kind, Hold.is_hand limb with
+            | Chalk_refill, true ->
+              { chalk with
+                remaining =
+                  Int.min Config.starting_chalk (chalk.remaining + Config.refill_amount)
+              }
+            | _, _ -> chalk
+          in
           Ok
-            ( { player with limbs; torso; stamina; turn = player.turn + 1 }
+            ( { limbs; torso; stamina; chalk; turn = player.turn + 1 }
             , { movement; penalties; upkeep; grip; total } )))
+;;
+
+(* §4.10: chalk the given hand — bag -1, hand chalked for chalk_duration
+   turns. Costs a turn (during which the other hand's chalk decays), no
+   stamina. Chalking a foot is nonsense; an empty bag is a typed rejection. *)
+let attempt_chalk ~wall:(_ : wall) ~broken:(_ : Set.M(Int).t) (player : player_state) limb =
+  if not (Hold.is_hand limb)
+  then Error Wrong_limb_for_hold
+  else if player.chalk.remaining <= 0
+  then Error No_chalk_left
+  else (
+    let chalk = decay_chalk player.chalk in
+    let chalk = { chalk with remaining = player.chalk.remaining - 1 } in
+    let chalk =
+      match limb with
+      | Left_hand -> { chalk with left_hand_chalk = Config.chalk_duration }
+      | Right_hand -> { chalk with right_hand_chalk = Config.chalk_duration }
+      | Left_foot | Right_foot -> chalk
+    in
+    Ok { player with chalk; turn = player.turn + 1 })
 ;;
 
 let attempt_move ~wall ~broken (player : player_state) limb hold =
@@ -227,6 +268,7 @@ let attempt_rest ~(wall : wall) ~broken:_ (player : player_state) =
     Ok
       { player with
         stamina = Int.min Config.starting_stamina (player.stamina + Config.rest_recovery)
+      ; chalk = decay_chalk player.chalk (* §4.10: resting still costs a turn of chalk *)
       ; turn = player.turn + 1
       }
   else Error Cannot_rest

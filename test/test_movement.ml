@@ -260,3 +260,113 @@ let%expect_test "purity: same inputs, same result; input state unchanged" =
     input unchanged: true
     |}]
 ;;
+
+let%expect_test "chalk action: bag, duration, decay, and the empty bag" =
+  let show (p : player_state) =
+    printf
+      "bag %d  L%d R%d  turn %d\n"
+      p.chalk.remaining
+      p.chalk.left_hand_chalk
+      p.chalk.right_hand_chalk
+      p.turn
+  in
+  let chalk p limb =
+    match Movement.attempt_chalk ~wall ~broken:no_broken p limb with
+    | Ok p -> p
+    | Error e -> raise_s [%message "chalk failed" (e : reject_reason)]
+  in
+  let p = chalk start Left_hand in
+  show p;
+  (* moving decays both hands' chalk by one *)
+  let p =
+    match Movement.attempt_move ~wall ~broken:no_broken p Left_hand (hold_for_id 4) with
+    | Ok p -> p
+    | Error _ -> failwith "move failed"
+  in
+  show p;
+  let p = chalk p Right_hand in
+  show p;
+  (* a foot cannot be chalked; an empty bag rejects *)
+  (match Movement.attempt_chalk ~wall ~broken:no_broken p Left_foot with
+   | Error e -> printf !"foot: %{sexp:reject_reason}\n" e
+   | Ok _ -> print_endline "chalked a foot?!");
+  let broke_bag = { p with chalk = { p.chalk with remaining = 0 } } in
+  (match Movement.attempt_chalk ~wall ~broken:no_broken broke_bag Left_hand with
+   | Error e -> printf !"empty: %{sexp:reject_reason}\n" e
+   | Ok _ -> print_endline "chalked from an empty bag?!");
+  [%expect {|
+    bag 4  L3 R0  turn 1
+    bag 4  L2 R0  turn 2
+    bag 3  L1 R3  turn 3
+    foot: Wrong_limb_for_hold
+    empty: No_chalk_left
+    |}]
+;;
+
+let%expect_test "chalk monotonicity (§6.4): chalking never makes a move dearer" =
+  (* same sloper grab, chalked vs not — on the sloper_gate wall *)
+  let wall = Wall.test_wall_sloper_gate in
+  let start = Wall.sloper_gate_start in
+  let climb p limb hold_id =
+    match
+      Movement.preview_move
+        ~wall
+        ~broken:no_broken
+        p
+        limb
+        (Option.value_exn (Wall.find wall hold_id))
+    with
+    | Ok (p, cost) -> p, cost
+    | Error e -> raise_s [%message "move failed" (e : reject_reason)]
+  in
+  (* walk both variants to the sloper row: hands to 4/5, then LH -> sloper 6 *)
+  let to_gate p =
+    let p, _ = climb p Left_hand 4 in
+    let p, _ = climb p Right_hand 5 in
+    p
+  in
+  let unchalked = to_gate start in
+  let chalked =
+    match Movement.attempt_chalk ~wall ~broken:no_broken (to_gate start) Left_hand with
+    | Ok p -> p
+    | Error _ -> failwith "chalk failed"
+  in
+  let _, cost_unchalked = climb unchalked Left_hand 6 in
+  let _, cost_chalked = climb chalked Left_hand 6 in
+  printf
+    "sloper grab: unchalked %d, chalked %d, monotone %b\n"
+    cost_unchalked.total
+    cost_chalked.total
+    (cost_chalked.total <= cost_unchalked.total);
+  [%expect {| sloper grab: unchalked 13, chalked 8, monotone true |}]
+;;
+
+let%expect_test "chalk refill: grabbing the pocket tops the bag up (capped)" =
+  let wall = Wall.test_wall_sloper_gate in
+  let start = Wall.sloper_gate_start in
+  let low_bag = { start with chalk = { start.chalk with remaining = 1 } } in
+  (match
+     Movement.attempt_move
+       ~wall
+       ~broken:no_broken
+       low_bag
+       Right_hand
+       (Option.value_exn (Wall.find wall 12))
+   with
+   | Ok p -> printf "bag after refill grab: %d\n" p.chalk.remaining
+   | Error e -> printf !"refill grab failed: %{sexp:reject_reason}\n" e);
+  (match
+     Movement.attempt_move
+       ~wall
+       ~broken:no_broken
+       start
+       Right_hand
+       (Option.value_exn (Wall.find wall 12))
+   with
+   | Ok p -> printf "already-full bag stays capped: %d\n" p.chalk.remaining
+   | Error e -> printf !"refill grab failed: %{sexp:reject_reason}\n" e);
+  [%expect {|
+    bag after refill grab: 4
+    already-full bag stays capped: 5
+    |}]
+;;
